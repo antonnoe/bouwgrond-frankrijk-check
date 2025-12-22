@@ -10,7 +10,6 @@
 
 <div style="max-width:920px;margin:0 auto;padding:16px;">
 
-  <!-- Titel -->
   <h1 style="color:#800000;">Bouwgrond-check Frankrijk</h1>
 
   <!-- Toggle -->
@@ -26,23 +25,29 @@
     </label>
   </div>
 
-  <!-- Invoerblok (v1) -->
+  <!-- Invoer -->
   <div style="margin:20px 0;">
     <label for="loc" style="font-weight:bold;">Waar wil je bouwen?</label><br>
     <input id="loc" type="text" placeholder="Postcode of gemeente"
            style="padding:10px;width:100%;max-width:320px;">
     <br><br>
-    <button style="padding:10px 16px;background:#800000;color:#fff;border:0;border-radius:4px;">
+    <button id="checkBtn"
+            style="padding:10px 16px;background:#800000;color:#fff;border:0;border-radius:4px;">
       Controleer
     </button>
   </div>
 
-  <!-- Resultaatblok (placeholder) -->
-  <div style="margin-top:30px;padding:16px;border:1px solid #ddd;border-radius:6px;">
+  <!-- Resultaat -->
+  <div id="result"
+       style="margin-top:30px;padding:16px;border:1px solid #ddd;border-radius:6px;display:none;">
     <h2 style="color:#800000;">Resultaat</h2>
 
     <p><strong>In principe:</strong> —</p>
-    <p><strong>Zone(s):</strong> U / AU / A / N</p>
+    <p>
+      <strong>Zone(s):</strong> U / AU / A / N
+      <span title="U = stedelijk | AU = te urbaniseren | A = agrarisch | N = natuur"
+            style="cursor:help;">[ i ]</span>
+    </p>
 
     <h3>Aandachtspunten</h3>
     <ul>
@@ -63,6 +68,38 @@
   </div>
 
 </div>
+
+<script>
+(function(){
+  const radios = document.querySelectorAll('input[name="mode"]');
+  const btn = document.getElementById('checkBtn');
+  const result = document.getElementById('result');
+
+  function update(){
+    const v = document.querySelector('input[name="mode"]:checked')?.value;
+    if (!v){
+      btn.disabled = true;
+      btn.style.opacity = .5;
+      result.style.display = 'none';
+      return;
+    }
+    if (v === 'local'){
+      btn.disabled = false;
+      btn.style.opacity = 1;
+      result.style.display = 'block';
+    } else {
+      btn.disabled = true;
+      btn.style.opacity = .5;
+      result.style.display = 'block';
+      result.querySelector('p').innerHTML =
+        '<strong>Regionaal (reverse)</strong> komt in v2. Kies nu <em>Locatiespecifiek</em>.';
+    }
+  }
+
+  radios.forEach(r => r.addEventListener('change', update));
+  update();
+})();
+</script>
 
 </body>
 </html>
