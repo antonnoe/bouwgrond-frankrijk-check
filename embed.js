@@ -4,171 +4,112 @@
   const result = document.getElementById("result");
   const suggestBox = document.getElementById("ban-suggest");
 
-  /* ================= MAP ================= */
+  const chkOCS = document.getElementById("chk-ocs");
+  const chkB = document.getElementById("chk-buildings");
+  const chkT = document.getElementById("chk-transport");
+  const chkH = document.getElementById("chk-hydro");
+
+  /* ================= MAPS ================= */
 
   const map = L.map("map").setView([46.6, 2.4], 6);
+  const mapSide = L.map("map-side", { zoomControl:false }).setView([46.6, 2.4], 6);
 
-  const baseOSM = L.tileLayer(
-    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    { attribution: "© OpenStreetMap" }
-  ).addTo(map);
-
-  // ---- STABIELE CARTO / IGN LAGEN ----
-  const ignOCS = L.tileLayer.wms(
-    "https://wxs.ign.fr/essentiels/geoportail/r/wms",
-    {
-      layers: "OCSGE_2019",
-      format: "image/png",
-      transparent: true,
-      attribution: "IGN – Occupation du sol",
-    }
-  );
-
-  const ignBuildings = L.tileLayer.wms(
-    "https://wxs.ign.fr/essentiels/geoportail/r/wms",
-    {
-      layers: "BATIMENTS",
-      format: "image/png",
-      transparent: true,
-      attribution: "IGN – Bâtiments",
-    }
-  );
-
-  const ignTransport = L.tileLayer.wms(
-    "https://wxs.ign.fr/essentiels/geoportail/r/wms",
-    {
-      layers: "TRANSPORTS",
-      format: "image/png",
-      transparent: true,
-      attribution: "IGN – Infrastructuur",
-    }
-  );
-
-  const ignHydro = L.tileLayer.wms(
-    "https://wxs.ign.fr/essentiels/geoportail/r/wms",
-    {
-      layers: "HYDROGRAPHIE",
-      format: "image/png",
-      transparent: true,
-      attribution: "IGN – Waterlopen",
-    }
-  );
-
-  const overlays = {
-    "Landgebruik (OCS)": ignOCS,
-    "Bebouwing": ignBuildings,
-    "Infrastructuur": ignTransport,
-    "Waterlopen": ignHydro,
-  };
-
-  L.control.layers(null, overlays, { collapsed: false }).addTo(map);
+  const base = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    { attribution:"© OpenStreetMap" }).addTo(map);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(mapSide);
 
   let marker = null;
-  function setMarker(lat, lon, label) {
-    if (marker) map.removeLayer(marker);
-    marker = L.marker([lat, lon]).addTo(map);
-    if (label) marker.bindPopup(label).openPopup();
-    map.setView([lat, lon], 14);
+  function setMarker(lat, lon, label){
+    if(marker){ map.removeLayer(marker); mapSide.removeLayer(marker); }
+    marker = L.marker([lat, lon]).addTo(map).bindPopup(label).openPopup();
+    L.marker([lat, lon]).addTo(mapSide);
+    map.setView([lat, lon], 15);
+    mapSide.setView([lat, lon], 15);
   }
 
-  /* ================= BAN AUTOCOMPLETE ================= */
+  /* ===== STABIELE IGN LAGEN ===== */
 
-  let banTimer = null;
+  const ignBase = "https://wxs.ign.fr/essentiels/geoportail/r/wms";
 
-  input.addEventListener("input", function () {
-    const q = input.value.trim();
-    clearTimeout(banTimer);
+  const ocs = L.tileLayer.wms(ignBase, {
+    layers:"OCSGE_2019",
+    transparent:true, format:"image/png"
+  }).addTo(map);
 
-    if (q.length < 3) {
-      suggestBox.style.display = "none";
-      return;
-    }
+  const buildings = L.tileLayer.wms(ignBase, {
+    layers:"BATIMENTS",
+    transparent:true, format:"image/png"
+  }).addTo(map);
 
-    banTimer = setTimeout(async () => {
-      try {
-        const r = await fetch(
-          `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=5`
-        );
-        const data = await r.json();
-
-        if (!data.features || !data.features.length) {
-          suggestBox.style.display = "none";
-          return;
-        }
-
-        suggestBox.innerHTML = data.features
-          .map(
-            (f) =>
-              `<div data-lat="${f.geometry.coordinates[1]}"
-                    data-lon="${f.geometry.coordinates[0]}"
-                    style="padding:6px;cursor:pointer;border-bottom:1px solid #eee;">
-                ${f.properties.label}
-              </div>`
-          )
-          .join("");
-
-        suggestBox.style.display = "block";
-      } catch {
-        suggestBox.style.display = "none";
-      }
-    }, 300);
+  const transport = L.tileLayer.wms(ignBase, {
+    layers:"TRANSPORTS",
+    transparent:true, format:"image/png"
   });
 
-  suggestBox.addEventListener("click", function (e) {
-    const d = e.target.closest("div");
-    if (!d) return;
-
-    const lat = parseFloat(d.dataset.lat);
-    const lon = parseFloat(d.dataset.lon);
-    const label = d.textContent;
-
-    input.value = label;
-    suggestBox.style.display = "none";
-    setMarker(lat, lon, label);
+  const hydro = L.tileLayer.wms(ignBase, {
+    layers:"HYDROGRAPHIE",
+    transparent:true, format:"image/png"
   });
 
-  /* ================= ANALYSE / LINKS ================= */
+  function syncLayers(){
+    chkOCS.checked ? map.addLayer(ocs) : map.removeLayer(ocs);
+    chkB.checked ? map.addLayer(buildings) : map.removeLayer(buildings);
+    chkT.checked ? map.addLayer(transport) : map.removeLayer(transport);
+    chkH.checked ? map.addLayer(hydro) : map.removeLayer(hydro);
+  }
+  [chkOCS,chkB,chkT,chkH].forEach(c=>c.addEventListener("change",syncLayers));
 
-  btn.addEventListener("click", async function () {
-    const q = input.value.trim();
-    if (!q) return;
+  /* ===== BAN AUTOCOMPLETE ===== */
 
-    result.style.display = "block";
+  let banTimer=null;
+  input.addEventListener("input",()=>{
+    const q=input.value.trim(); clearTimeout(banTimer);
+    if(q.length<3){ suggestBox.style.display="none"; return; }
+    banTimer=setTimeout(async()=>{
+      try{
+        const r=await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=5`);
+        const d=await r.json();
+        if(!d.features?.length){ suggestBox.style.display="none"; return; }
+        suggestBox.innerHTML=d.features.map(f=>
+          `<div data-lat="${f.geometry.coordinates[1]}" data-lon="${f.geometry.coordinates[0]}"
+            style="padding:6px;cursor:pointer;border-bottom:1px solid #eee;">${f.properties.label}</div>`
+        ).join("");
+        suggestBox.style.display="block";
+      }catch{ suggestBox.style.display="none"; }
+    },300);
+  });
+
+  suggestBox.addEventListener("click",e=>{
+    const d=e.target.closest("div"); if(!d)return;
+    const lat=+d.dataset.lat, lon=+d.dataset.lon, label=d.textContent;
+    input.value=label; suggestBox.style.display="none";
+    setMarker(lat,lon,label);
+  });
+
+  /* ===== KLIK OP KAART = CONTEXT ===== */
+
+  map.on("click", (e)=>{
+    const {lat,lng}=e.latlng;
     result.innerHTML = `
-      <h2 style="color:#800000;">Resultaat & vervolgstappen</h2>
-      <p><strong>Locatie:</strong> ${q}</p>
-
-      <h3>Automatische analyse</h3>
-      <p>Deze tool toont stabiele contextlagen op de kaart. Voor juridische zekerheid gebruik je de officiële bronnen hieronder.</p>
-
-      <h3>Officiële bronnen (handmatig)</h3>
+      <h4>Context (indicatief)</h4>
+      <p><strong>Locatie:</strong> ${lat.toFixed(5)}, ${lng.toFixed(5)}</p>
       <ul>
-        <li>
-          <a href="https://www.geoportail-urbanisme.gouv.fr/" target="_blank">
-            Géoportail de l’Urbanisme (PLU / zonering)
-          </a>
-        </li>
-        <li>
-          <a href="https://www.georisques.gouv.fr/" target="_blank">
-            GéoRisques (overstroming, bosbrand, bodem)
-          </a>
-        </li>
-        <li>
-          <a href="https://www.cadastre.gouv.fr/" target="_blank">
-            Cadastre (perceelgegevens)
-          </a>
-        </li>
-        <li>
-          <a href="https://www.geoportail.gouv.fr/" target="_blank">
-            IGN kaartviewer (volledig)
-          </a>
-        </li>
+        <li>Landgebruik & bebouwing: visueel op kaart (IGN OCS / Bâtiments)</li>
+        <li>Infrastructuur / waterlopen: optionele lagen</li>
       </ul>
-
-      <p style="font-size:.9em;color:#555;">
-        Indicatief. Geen bouwrecht. Definitieve zekerheid via
-        <strong>Certificat d’Urbanisme</strong> en de <strong>mairie</strong>.
-      </p>
+      <p><strong>Controleer officieel:</strong></p>
+      <ul>
+        <li><a target="_blank" href="https://www.geoportail-urbanisme.gouv.fr/">PLU (GPU)</a></li>
+        <li><a target="_blank" href="https://www.georisques.gouv.fr/">Risico’s</a></li>
+        <li><a target="_blank" href="https://www.cadastre.gouv.fr/">Cadastre</a></li>
+      </ul>
     `;
+  });
+
+  /* ===== ANALYSE BUTTON (fail-safe) ===== */
+
+  btn.addEventListener("click", async ()=>{
+    const q=input.value.trim(); if(!q)return;
+    result.innerHTML="<p>Analyse uitgevoerd. Gebruik kaart en context.</p>";
   });
 })();
