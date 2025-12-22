@@ -36,10 +36,14 @@
     result.innerHTML = '<p>Bezig met controleren…</p>';
 
     try {
-      const r = await fetch(`/api/check?code=${encodeURIComponent(q)}`);
+      // 🔑 Gebruik ALLEEN ?q=
+      const r = await fetch(`/api/check?q=${encodeURIComponent(q)}`);
+      if (!r.ok) {
+        result.innerHTML = `<p><strong>Fout:</strong> ${r.status}</p>`;
+        return;
+      }
       const data = await r.json();
 
-      // 🔒 FOUTAFHANDELING
       if (data.error || !data.samenvatting) {
         result.innerHTML = `<p><strong>Fout:</strong> ${data.error || 'Onverwachte response.'}</p>`;
         return;
