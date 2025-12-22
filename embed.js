@@ -2,11 +2,15 @@
   const input = document.getElementById("loc");
   const result = document.getElementById("result");
   const suggestBox = document.getElementById("ban-suggest");
+  const checkBtn = document.getElementById("checkBtn");
 
   const chkOCS = document.getElementById("chk-ocs");
   const chkB = document.getElementById("chk-buildings");
   const chkT = document.getElementById("chk-transport");
   const chkH = document.getElementById("chk-hydro");
+
+  let selectedLat = null;
+  let selectedLon = null;
 
   /* ================= MAP ================= */
 
@@ -21,34 +25,40 @@
     if (marker) map.removeLayer(marker);
     marker = L.marker([lat, lon]).addTo(map).bindPopup(label).openPopup();
     map.setView([lat, lon], 15);
+    selectedLat = lat;
+    selectedLon = lon;
   }
 
-  /* ===== IGN WMS LAYERS ===== */
+  /* ===== IGN WMS LAYERS (visueel) ===== */
 
-  const WMS_URL = "https://wxs.ign.fr/essentiels/geoportail/r/wms";
+  const WMS_URL = "https://data.geopf.fr/wms-r/wms";
 
   const ocs = L.tileLayer.wms(WMS_URL, {
-    layers: "OCSGE_2019",
+    layers: "LANDUSE.AGRICULTURE2021",
     format: "image/png",
     transparent: true,
+    opacity: 0.5,
   }).addTo(map);
 
   const buildings = L.tileLayer.wms(WMS_URL, {
-    layers: "BATIMENTS",
+    layers: "BDTOPO_V3:batiment",
     format: "image/png",
     transparent: true,
+    opacity: 0.6,
   }).addTo(map);
 
   const transport = L.tileLayer.wms(WMS_URL, {
-    layers: "TRANSPORTS",
+    layers: "BDTOPO_V3:troncon_de_route",
     format: "image/png",
     transparent: true,
+    opacity: 0.5,
   });
 
   const hydro = L.tileLayer.wms(WMS_URL, {
-    layers: "HYDROGRAPHIE",
+    layers: "BDTOPO_V3:surface_hydrographique",
     format: "image/png",
     transparent: true,
+    opacity: 0.5,
   });
 
   function syncLayers() {
@@ -61,7 +71,7 @@
     c.addEventListener("change", syncLayers)
   );
 
-  /* ================= BAN ================= */
+  /* ================= BAN AUTOCOMPLETE ================= */
 
   let banTimer = null;
   input.addEventListener("input", function () {
@@ -74,9 +84,7 @@
     banTimer = setTimeout(async () => {
       try {
         const r = await fetch(
-          `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(
-            q
-          )}&limit=5`
+          `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=5`
         );
         const d = await r.json();
         if (!d.features?.length) {
@@ -88,7 +96,8 @@
             (f) => `
           <div data-lat="${f.geometry.coordinates[1]}"
                data-lon="${f.geometry.coordinates[0]}"
-               style="padding:6px;cursor:pointer;border-bottom:1px solid #eee;">
+               data-label="${f.properties.label}"
+               style="padding:8px 10px;cursor:pointer;border-bottom:1px solid #eee;">
             ${f.properties.label}
           </div>`
           )
@@ -105,90 +114,166 @@
     if (!d) return;
     const lat = +d.dataset.lat;
     const lon = +d.dataset.lon;
-    const label = d.textContent;
+    const label = d.dataset.label || d.textContent.trim();
     input.value = label;
     suggestBox.style.display = "none";
     setMarker(lat, lon, label);
   });
 
-  /* ================= WOW: CLICK → FEATURE INFO ================= */
+  /* ================= ANALYZE BUTTON ================= */
 
-  function getFeatureInfoUrl(layer, latlng) {
-    const point = map.latLngToContainerPoint(latlng, map.getZoom());
-    const size = map.getSize();
+  checkBtn.addEventListener("click", () => {
+    if (selectedLat && selectedLon) {
+      runAnalysis(selectedLat, selectedLon);
+    } else {
+      result.innerHTML = `<p style="color:#800000;"><strong>Selecteer eerst een adres uit de lijst of klik op de kaart.</strong></p>`;
+    }
+  });
 
-    const params = {
-      request: "GetFeatureInfo",
-      service: "WMS",
-      srs: "EPSG:4326",
-      styles: "",
-      transparent: true,
-      version: "1.3.0",
-      format: "image/png",
-      bbox: map.getBounds().toBBoxString(),
-      height: size.y,
-      width: size.x,
-      layers: layer.wmsParams.layers,
-      query_layers: layer.wmsParams.layers,
-      info_format: "application/json",
-      i: Math.round(point.x),
-      j: Math.round(point.y),
-    };
-
-    return WMS_URL + L.Util.getParamString(params, WMS_URL, true);
-  }
+  /* ================= MAP CLICK → ANALYZE ================= */
 
   map.on("click", async (e) => {
-    result.innerHTML = `<h4>Analyse op aangeklikte locatie</h4>
-      <p><strong>Coördinaat:</strong> ${e.latlng.lat.toFixed(
-        5
-      )}, ${e.latlng.lng.toFixed(5)}</p>
-      <p>Bezig met analyseren…</p>`;
+    const lat = e.latlng.lat;
+    const lon = e.latlng.lng;
+    setMarker(lat, lon, `${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+    input.value = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    runAnalysis(lat, lon);
+  });
 
-    let lines = [];
+  /* ================= CORE ANALYSIS FUNCTION ================= */
 
-    if (chkOCS.checked) {
-      try {
-        const r = await fetch(getFeatureInfoUrl(ocs, e.latlng));
-        const j = await r.json();
-        if (j.features?.length) {
-          lines.push(
-            `<strong>Landgebruik:</strong> ${j.features[0].properties.NATURE}`
-          );
-        } else {
-          lines.push("<strong>Landgebruik:</strong> geen data");
-        }
-      } catch {
-        lines.push("<strong>Landgebruik:</strong> niet beschikbaar");
-      }
-    }
-
-    if (chkB.checked) {
-      try {
-        const r = await fetch(getFeatureInfoUrl(buildings, e.latlng));
-        const j = await r.json();
-        lines.push(
-          `<strong>Bebouwing:</strong> ${
-            j.features?.length ? "gebouw aanwezig" : "geen gebouw"
-          }`
-        );
-      } catch {
-        lines.push("<strong>Bebouwing:</strong> niet beschikbaar");
-      }
-    }
-
+  async function runAnalysis(lat, lon) {
     result.innerHTML = `
-      <h4>Context (indicatief)</h4>
-      <ul>${lines.map((l) => `<li>${l}</li>`).join("")}</ul>
-      <p><strong>Controleer officieel:</strong></p>
-      <ul>
-        <li><a target="_blank" href="https://www.geoportail-urbanisme.gouv.fr/">PLU (GPU)</a></li>
-        <li><a target="_blank" href="https://www.georisques.gouv.fr/">Risico’s</a></li>
-        <li><a target="_blank" href="https://www.cadastre.gouv.fr/">Cadastre</a></li>
-      </ul>
-      <p style="font-size:.9em;color:#555;">
-        Indicatief. Geen bouwrecht. Definitieve zekerheid via Certificat d’Urbanisme en mairie.
+      <h4 style="color:#800000;">Analyse bezig…</h4>
+      <p><strong>Coördinaten:</strong> ${lat.toFixed(5)}, ${lon.toFixed(5)}</p>
+      <p>Even geduld, gegevens worden opgehaald…</p>
+    `;
+
+    try {
+      const res = await fetch(`/api/analyze?lat=${lat}&lon=${lon}`);
+      const data = await res.json();
+
+      if (!data.ok) {
+        result.innerHTML = `<p style="color:#c00;"><strong>Fout:</strong> ${data.error || "Onbekende fout"}</p>`;
+        return;
+      }
+
+      renderResults(data);
+    } catch (e) {
+      result.innerHTML = `<p style="color:#c00;"><strong>Verbindingsfout:</strong> ${e.message}</p>`;
+    }
+  }
+
+  /* ================= RENDER RESULTS ================= */
+
+  function renderResults(data) {
+    let html = `<h4 style="color:#800000;">Analyseresultaat</h4>`;
+
+    // Samenvatting
+    if (data.summary) {
+      if (data.summary.warnings?.length) {
+        html += `<div style="background:#fff3cd;border-left:4px solid #ffc107;padding:10px;margin:10px 0;">
+          <strong>⚠️ Aandachtspunten:</strong>
+          <ul style="margin:5px 0 0 0;padding-left:20px;">
+            ${data.summary.warnings.map((w) => `<li>${w}</li>`).join("")}
+          </ul>
+        </div>`;
+      }
+      if (data.summary.positives?.length) {
+        html += `<div style="background:#d4edda;border-left:4px solid #28a745;padding:10px;margin:10px 0;">
+          <strong>✓ Positief:</strong>
+          <ul style="margin:5px 0 0 0;padding-left:20px;">
+            ${data.summary.positives.map((p) => `<li>${p}</li>`).join("")}
+          </ul>
+        </div>`;
+      }
+    }
+
+    // Kadaster
+    if (data.cadastre) {
+      html += renderSection("Kadaster", data.cadastre, "🗺️");
+    }
+
+    // PLU
+    if (data.plu) {
+      html += renderSection("Bestemmingsplan (PLU)", data.plu, "📋");
+    }
+
+    // Georisques
+    if (data.georisques) {
+      html += renderGeorisques(data.georisques);
+    }
+
+    // DVF link
+    html += `
+      <div style="border:1px solid #ddd;padding:10px;margin:10px 0;border-radius:4px;">
+        <strong>💶 Verkoopprijzen (DVF)</strong><br>
+        <a href="https://app.dvf.etalab.gouv.fr/?lon=${data.coords.lon}&lat=${data.coords.lat}" 
+           target="_blank" style="color:#800000;">
+          Bekijk transacties in de omgeving →
+        </a>
+      </div>
+    `;
+
+    // Disclaimer
+    html += `
+      <p style="font-size:.85em;color:#666;margin-top:15px;padding-top:10px;border-top:1px solid #ddd;">
+        ${data.disclaimer}
       </p>
     `;
-  });
+
+    result.innerHTML = html;
+  }
+
+  function renderSection(title, section, icon) {
+    const statusColor =
+      section.status === "ok"
+        ? "#28a745"
+        : section.status === "no_data"
+          ? "#ffc107"
+          : "#dc3545";
+
+    return `
+      <div style="border:1px solid #ddd;padding:10px;margin:10px 0;border-radius:4px;">
+        <strong>${icon} ${title}</strong>
+        <span style="float:right;color:${statusColor};font-size:.85em;">
+          ${section.status === "ok" ? "✓" : section.status === "no_data" ? "–" : "✗"}
+        </span>
+        <br>
+        <span>${section.message}</span>
+        ${section.sourceUrl ? `<br><a href="${section.sourceUrl}" target="_blank" style="font-size:.85em;color:#800000;">Officiële bron →</a>` : ""}
+      </div>
+    `;
+  }
+
+  function renderGeorisques(geo) {
+    let html = `
+      <div style="border:1px solid #ddd;padding:10px;margin:10px 0;border-radius:4px;">
+        <strong>⚠️ Risico's (Georisques)</strong>
+        <span style="float:right;color:${geo.status === "ok" ? "#28a745" : "#dc3545"};font-size:.85em;">
+          ${geo.status === "ok" ? "✓" : "✗"}
+        </span>
+    `;
+
+    if (geo.catnat) {
+      html += `<br><span style="font-size:.9em;">Catnat: ${geo.catnat.message}</span>`;
+      if (geo.catnat.types?.length) {
+        html += `<br><span style="font-size:.85em;color:#666;">Types: ${geo.catnat.types.join(", ")}</span>`;
+      }
+    }
+
+    if (geo.risques) {
+      html += `<br><span style="font-size:.9em;">Risico's: ${geo.risques.message}</span>`;
+      if (geo.risques.types?.length) {
+        html += `<br><span style="font-size:.85em;color:#666;">${geo.risques.types.join(", ")}</span>`;
+      }
+    }
+
+    if (geo.sourceUrl) {
+      html += `<br><a href="${geo.sourceUrl}" target="_blank" style="font-size:.85em;color:#800000;">Volledig rapport →</a>`;
+    }
+
+    html += `</div>`;
+    return html;
+  }
 })();
