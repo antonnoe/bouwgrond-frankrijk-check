@@ -32,8 +32,7 @@
            style="padding:10px;width:100%;max-width:320px;">
     <br><br>
     <button id="checkBtn"
-            style="padding:10px 16px;background:#800000;color:#fff;border:0;border-radius:4px;"
-            disabled>
+            style="padding:10px 16px;background:#800000;color:#fff;border:0;border-radius:4px;">
       Controleer
     </button>
   </div>
@@ -45,40 +44,7 @@
 
 </div>
 
-<!-- UI-logica -->
-<script>
-(function(){
-  const radios = document.querySelectorAll('input[name="mode"]');
-  const btn = document.getElementById('checkBtn');
-  const result = document.getElementById('result');
-
-  function updateUI(){
-    const v = document.querySelector('input[name="mode"]:checked')?.value;
-    if (!v){
-      btn.disabled = true;
-      btn.style.opacity = .5;
-      result.style.display = 'none';
-      return;
-    }
-    if (v === 'local'){
-      btn.disabled = false;
-      btn.style.opacity = 1;
-      result.style.display = 'none';
-    } else {
-      btn.disabled = true;
-      btn.style.opacity = .5;
-      result.style.display = 'block';
-      result.innerHTML =
-        '<p><strong>Regionaal (reverse)</strong> komt in v2. Kies nu <em>Locatiespecifiek</em>.</p>';
-    }
-  }
-
-  radios.forEach(r => r.addEventListener('change', updateUI));
-  updateUI();
-})();
-</script>
-
-<!-- Koppeling met API -->
+<!-- Koppeling met API (en UI-logica) -->
 <script src="/api/embed.js"></script>
 
 </body>
