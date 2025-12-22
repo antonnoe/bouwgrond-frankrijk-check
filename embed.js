@@ -1,4 +1,4 @@
-// /api/embed.js
+// /embed.js
 (function () {
   const btn = document.getElementById('checkBtn');
   const input = document.getElementById('loc');
@@ -7,20 +7,12 @@
 
   if (!btn || !input || !result || !radios.length) return;
 
-  // Init state
+  // init
   btn.disabled = true;
   btn.style.opacity = 0.5;
 
   function updateMode() {
     const mode = document.querySelector('input[name="mode"]:checked')?.value;
-
-    if (!mode) {
-      btn.disabled = true;
-      btn.style.opacity = 0.5;
-      result.style.display = 'none';
-      return;
-    }
-
     if (mode === 'local') {
       btn.disabled = false;
       btn.style.opacity = 1;
@@ -33,7 +25,6 @@
         '<p><strong>Regionaal (reverse)</strong> komt in v2. Kies <em>Locatiespecifiek</em>.</p>';
     }
   }
-
   radios.forEach(r => r.addEventListener('change', updateMode));
   updateMode();
 
@@ -47,6 +38,12 @@
     try {
       const r = await fetch(`/api/check?code=${encodeURIComponent(q)}`);
       const data = await r.json();
+
+      // 🔒 FOUTAFHANDELING
+      if (data.error || !data.samenvatting) {
+        result.innerHTML = `<p><strong>Fout:</strong> ${data.error || 'Onverwachte response.'}</p>`;
+        return;
+      }
 
       result.innerHTML = `
         <h2 style="color:#800000;">Resultaat</h2>
