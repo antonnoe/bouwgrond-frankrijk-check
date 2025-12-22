@@ -17,7 +17,8 @@
 
   const map = L.map("map").setView([46.6, 2.4], 6);
 
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  // Basislaag: OpenStreetMap
+  const osmBase = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "© OpenStreetMap",
   }).addTo(map);
 
@@ -31,47 +32,99 @@
     selectedLabel = label;
   }
 
-  /* ===== IGN WMS LAYERS (visueel) ===== */
+  /* ===== IGN GEOPLATEFORME WMTS LAYERS ===== */
 
-  const WMS_URL = "https://data.geopf.fr/wms-r/wms";
+  // WMTS endpoint (stabieler dan WMS)
+  const WMTS_URL = "https://data.geopf.fr/wmts";
 
-  const ocs = L.tileLayer.wms(WMS_URL, {
-    layers: "LANDUSE.AGRICULTURE2021",
-    format: "image/png",
-    transparent: true,
-    opacity: 0.5,
-  }).addTo(map);
+  // Kadastrale percelen
+  const cadastre = L.tileLayer(
+    `${WMTS_URL}?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=CADASTRALPARCELS.PARCELLAIRE_EXPRESS&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}`,
+    {
+      attribution: "© IGN",
+      opacity: 0.7,
+      maxZoom: 19,
+    }
+  ).addTo(map);
 
-  const buildings = L.tileLayer.wms(WMS_URL, {
-    layers: "BDTOPO_V3:batiment",
-    format: "image/png",
-    transparent: true,
-    opacity: 0.6,
-  }).addTo(map);
+  // Plan IGN (bebouwing + wegen + labels)
+  const planIgn = L.tileLayer(
+    `${WMTS_URL}?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}`,
+    {
+      attribution: "© IGN",
+      opacity: 0.6,
+      maxZoom: 19,
+    }
+  );
 
-  const transport = L.tileLayer.wms(WMS_URL, {
-    layers: "BDTOPO_V3:troncon_de_route",
-    format: "image/png",
-    transparent: true,
-    opacity: 0.5,
-  });
+  // Luchtfoto's
+  const ortho = L.tileLayer(
+    `${WMTS_URL}?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}`,
+    {
+      attribution: "© IGN",
+      opacity: 0.8,
+      maxZoom: 19,
+    }
+  );
 
-  const hydro = L.tileLayer.wms(WMS_URL, {
-    layers: "BDTOPO_V3:surface_hydrographique",
-    format: "image/png",
-    transparent: true,
-    opacity: 0.5,
-  });
+  // Hydrografie (waterlopen)
+  const hydro = L.tileLayer(
+    `${WMTS_URL}?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=HYDROGRAPHY.HYDROGRAPHY&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}`,
+    {
+      attribution: "© IGN",
+      opacity: 0.7,
+      maxZoom: 19,
+    }
+  );
+
+  // Wegen/transport
+  const transport = L.tileLayer(
+    `${WMTS_URL}?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=TRANSPORTNETWORKS.ROADS&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}`,
+    {
+      attribution: "© IGN",
+      opacity: 0.6,
+      maxZoom: 19,
+    }
+  );
+
+  /* ===== LAYER SYNC ===== */
 
   function syncLayers() {
-    chkOCS.checked ? map.addLayer(ocs) : map.removeLayer(ocs);
-    chkB.checked ? map.addLayer(buildings) : map.removeLayer(buildings);
-    chkT.checked ? map.addLayer(transport) : map.removeLayer(transport);
-    chkH.checked ? map.addLayer(hydro) : map.removeLayer(hydro);
+    // Landgebruik = Kadaster (percelen zichtbaar)
+    if (chkOCS.checked) {
+      if (!map.hasLayer(cadastre)) map.addLayer(cadastre);
+    } else {
+      if (map.hasLayer(cadastre)) map.removeLayer(cadastre);
+    }
+
+    // Bebouwing = Plan IGN
+    if (chkB.checked) {
+      if (!map.hasLayer(planIgn)) map.addLayer(planIgn);
+    } else {
+      if (map.hasLayer(planIgn)) map.removeLayer(planIgn);
+    }
+
+    // Infrastructuur = Transport
+    if (chkT.checked) {
+      if (!map.hasLayer(transport)) map.addLayer(transport);
+    } else {
+      if (map.hasLayer(transport)) map.removeLayer(transport);
+    }
+
+    // Waterlopen = Hydro
+    if (chkH.checked) {
+      if (!map.hasLayer(hydro)) map.addLayer(hydro);
+    } else {
+      if (map.hasLayer(hydro)) map.removeLayer(hydro);
+    }
   }
+
   [chkOCS, chkB, chkT, chkH].forEach((c) =>
     c.addEventListener("change", syncLayers)
   );
+
+  // Initiële sync
+  syncLayers();
 
   /* ================= BAN AUTOCOMPLETE ================= */
 
