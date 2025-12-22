@@ -9,6 +9,7 @@ export default async function handler(req, res) {
   const url = new URL(req.url, `https://${req.headers.host}`);
   const lat = parseFloat(url.searchParams.get("lat"));
   const lon = parseFloat(url.searchParams.get("lon"));
+  const adresse = url.searchParams.get("adresse") || "";
 
   if (!lat || !lon || isNaN(lat) || isNaN(lon)) {
     return res.status(200).json({
@@ -20,6 +21,7 @@ export default async function handler(req, res) {
   const results = {
     ok: true,
     coords: { lat, lon },
+    adresse: adresse,
     georisques: null,
     plu: null,
     cadastre: null,
@@ -32,12 +34,63 @@ export default async function handler(req, res) {
     coordinates: [lon, lat],
   };
 
+  // ========== EERST CADASTRE (voor commune/INSEE info) ==========
+  let communeNaam = "";
+  let codeInsee = "";
+
+  try {
+    const cadUrl = `https://apicarto.ign.fr/api/cadastre/parcelle?geom=${encodeURIComponent(
+      JSON.stringify(geoJsonPoint)
+    )}`;
+
+    const cadRes = await fetch(cadUrl);
+
+    if (cadRes.ok) {
+      const cad = await cadRes.json();
+      if (cad.features?.length) {
+        const props = cad.features[0].properties;
+        communeNaam = props.nom_com || "";
+        codeInsee = props.code_dep && props.code_com 
+          ? props.code_dep + props.code_com 
+          : (props.code_insee || "");
+        
+        results.cadastre = {
+          status: "ok",
+          commune: communeNaam,
+          codeInsee: codeInsee,
+          section: props.section || null,
+          numero: props.numero || null,
+          contenance: props.contenance || null,
+          feuille: props.feuille || null,
+          reference: `${props.section || ""}${props.numero || ""}`,
+          message: `Parcelle ${props.section || ""}${props.numero || ""} - ${communeNaam || "Onbekend"}`,
+          sourceUrl: `https://www.cadastre.gouv.fr/scpc/rechercherPlan.do`,
+        };
+      } else {
+        results.cadastre = {
+          status: "no_data",
+          message: "Geen kadasterdata op dit punt",
+          sourceUrl: "https://www.cadastre.gouv.fr/",
+        };
+      }
+    } else {
+      throw new Error(`HTTP ${cadRes.status}`);
+    }
+  } catch (e) {
+    results.errors.push("cadastre: " + e.message);
+    results.cadastre = {
+      status: "error",
+      message: "Kadaster-check niet beschikbaar",
+      sourceUrl: "https://www.cadastre.gouv.fr/",
+    };
+  }
+
   // ========== GEORISQUES: CATNAT + RISQUES ==========
   try {
-    // Georisques gebruikt latlon=lon,lat (let op: lon eerst!)
+    // page_size=100 om meer resultaten te krijgen, en we gebruiken 'total' veld
     const [catnatRes, risquesRes] = await Promise.all([
       fetch(
-        `https://www.georisques.gouv.fr/api/v1/gaspar/catnat?rayon=1000&latlon=${lon},${lat}`
+        `https://www.georisques.gouv.fr/api/v1/gaspar/catnat?rayon=1000&latlon=${lon},${lat}&page_size=1`
       ),
       fetch(
         `https://www.georisques.gouv.fr/api/v1/gaspar/risques?rayon=1000&latlon=${lon},${lat}`
@@ -47,24 +100,41 @@ export default async function handler(req, res) {
     const catnat = catnatRes.ok ? await catnatRes.json() : null;
     const risques = risquesRes.ok ? await risquesRes.json() : null;
 
-    const catnatCount = catnat?.data?.length || 0;
-    const catnatTypes = catnat?.data
-      ? [...new Set(catnat.data.map((c) => c.libelle_risque_jo))]
-      : [];
+    // Gebruik 'total' veld voor het echte aantal, niet array length
+    const catnatTotal = catnat?.total || catnat?.data?.length || 0;
+    
+    // Haal types op met een aparte call als er catnat zijn
+    let catnatTypes = [];
+    if (catnatTotal > 0) {
+      try {
+        const typesRes = await fetch(
+          `https://www.georisques.gouv.fr/api/v1/gaspar/catnat?rayon=1000&latlon=${lon},${lat}&page_size=100`
+        );
+        const typesData = await typesRes.json();
+        if (typesData?.data) {
+          catnatTypes = [...new Set(typesData.data.map((c) => c.libelle_risque_jo))].filter(Boolean);
+        }
+      } catch {
+        // Negeer fout, we hebben al het totaal
+      }
+    }
 
     const risquesList = risques?.data?.[0]?.risques_detail || [];
     const risquesActifs = risquesList
       .filter((r) => r.num_risque)
       .map((r) => r.libelle_risque_long || r.libelle_risque);
 
+    // Bouw correcte Georisques rapport URL
+    const geoRisquesUrl = buildGeorisquesUrl(lat, lon, adresse, communeNaam, codeInsee);
+
     results.georisques = {
       status: "ok",
       catnat: {
-        count: catnatCount,
+        count: catnatTotal,
         types: catnatTypes.slice(0, 5),
         message:
-          catnatCount > 0
-            ? `${catnatCount} arrêté(s) catnat sinds 1982`
+          catnatTotal > 0
+            ? `${catnatTotal} arrêté(s) catnat sinds 1982`
             : "Geen catnat-arresten bekend",
       },
       risques: {
@@ -75,7 +145,7 @@ export default async function handler(req, res) {
             ? `${risquesActifs.length} risico(s) geïdentificeerd`
             : "Geen bekende risico's",
       },
-      sourceUrl: `https://www.georisques.gouv.fr/mes-risques/connaitre-les-risques-pres-de-chez-moi/rapport?lon=${lon}&lat=${lat}`,
+      sourceUrl: geoRisquesUrl,
     };
   } catch (e) {
     results.errors.push("georisques: " + e.message);
@@ -116,8 +186,7 @@ export default async function handler(req, res) {
         };
       }
     } else {
-      const errText = await gpuRes.text();
-      throw new Error(`HTTP ${gpuRes.status}: ${errText.substring(0, 100)}`);
+      throw new Error(`HTTP ${gpuRes.status}`);
     }
   } catch (e) {
     results.errors.push("plu: " + e.message);
@@ -125,50 +194,6 @@ export default async function handler(req, res) {
       status: "error",
       message: "PLU-check niet beschikbaar",
       sourceUrl: "https://www.geoportail-urbanisme.gouv.fr/",
-    };
-  }
-
-  // ========== API CARTO CADASTRE: PARCELLE ==========
-  try {
-    const cadUrl = `https://apicarto.ign.fr/api/cadastre/parcelle?geom=${encodeURIComponent(
-      JSON.stringify(geoJsonPoint)
-    )}`;
-
-    const cadRes = await fetch(cadUrl);
-
-    if (cadRes.ok) {
-      const cad = await cadRes.json();
-      if (cad.features?.length) {
-        const props = cad.features[0].properties;
-        results.cadastre = {
-          status: "ok",
-          commune: props.nom_com || null,
-          codeInsee: props.code_dep + props.code_com || null,
-          section: props.section || null,
-          numero: props.numero || null,
-          contenance: props.contenance || null,
-          feuille: props.feuille || null,
-          reference: `${props.section || ""}${props.numero || ""}`,
-          message: `Parcelle ${props.section || ""}${props.numero || ""} - ${props.nom_com || "Onbekend"}`,
-          sourceUrl: `https://www.cadastre.gouv.fr/scpc/rechercherPlan.do`,
-        };
-      } else {
-        results.cadastre = {
-          status: "no_data",
-          message: "Geen kadasterdata op dit punt",
-          sourceUrl: "https://www.cadastre.gouv.fr/",
-        };
-      }
-    } else {
-      const errText = await cadRes.text();
-      throw new Error(`HTTP ${cadRes.status}: ${errText.substring(0, 100)}`);
-    }
-  } catch (e) {
-    results.errors.push("cadastre: " + e.message);
-    results.cadastre = {
-      status: "error",
-      message: "Kadaster-check niet beschikbaar",
-      sourceUrl: "https://www.cadastre.gouv.fr/",
     };
   }
 
@@ -180,15 +205,35 @@ export default async function handler(req, res) {
   return res.status(200).json(results);
 }
 
+function buildGeorisquesUrl(lat, lon, adresse, city, codeInsee) {
+  const params = new URLSearchParams({
+    "form-adresse": "true",
+    "isCadastre": "false",
+    "lon": lon.toString(),
+    "lat": lat.toString(),
+    "go_back": "/",
+    "propertiesType": "street",
+    "typeForm": "adresse",
+  });
+
+  if (city) params.set("city", city);
+  if (codeInsee) params.set("codeInsee", codeInsee);
+  if (adresse) params.set("adresse", adresse);
+
+  return `https://www.georisques.gouv.fr/mes-risques/connaitre-les-risques-pres-de-chez-moi/rapport2?${params.toString()}`;
+}
+
 function buildSummary(r) {
   const warnings = [];
   const positives = [];
 
   // Georisques
-  if (r.georisques?.catnat?.count > 5) {
+  if (r.georisques?.catnat?.count > 10) {
     warnings.push(`Let op: ${r.georisques.catnat.count} catnat-arresten`);
   } else if (r.georisques?.catnat?.count > 0) {
-    positives.push(`${r.georisques.catnat.count} catnat-arrest(en) - gemiddeld`);
+    positives.push(`${r.georisques.catnat.count} catnat-arrest(en)`);
+  } else if (r.georisques?.status === "ok" && r.georisques?.catnat?.count === 0) {
+    positives.push("Geen catnat-arresten");
   }
 
   if (r.georisques?.risques?.count > 0) {
@@ -199,7 +244,7 @@ function buildSummary(r) {
 
   // PLU
   if (r.plu?.status === "ok") {
-    const zone = r.plu.typeZone || "";
+    const zone = r.plu.typeZone || r.plu.zone || "";
     if (zone.startsWith("U")) {
       positives.push(`PLU-zone ${r.plu.zone} (bebouwd gebied)`);
     } else if (zone.startsWith("AU")) {
