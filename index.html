@@ -8,43 +8,87 @@
 
 <body style="font-family: Mulish, Arial, sans-serif; line-height:1.8; color:#111; background:#fff;">
 
-<div style="max-width:920px;margin:0 auto;padding:16px;">
+<div style="max-width:980px;margin:0 auto;padding:18px;">
 
-  <h1 style="color:#800000;">Bouwgrond-check Frankrijk</h1>
+  <h1 style="color:#800000;">Bouwgrond & Omgevingsanalyse – Frankrijk</h1>
+  <p style="max-width:820px;">
+    Dit instrument geeft <strong>inzicht</strong> in bouwbaarheid, risico’s en planologische context.
+    Geschikt voor <strong>kopers</strong> én voor <strong>huiseigenaren</strong> die hun omgeving of buren willen analyseren.
+  </p>
 
-  <!-- Toggle -->
-  <div style="margin:20px 0;padding:12px;border:1px solid #ddd;border-radius:6px;">
-    <strong>Wat wil je doen?</strong><br><br>
-    <label>
-      <input type="radio" name="mode" value="local">
-      Locatiespecifiek – kopen / checken
-    </label><br>
-    <label>
-      <input type="radio" name="mode" value="reverse">
-      Regionaal (reverse) – zoeken / vergelijken
-    </label>
+  <!-- Keuze analyses -->
+  <div style="margin:20px 0;padding:14px;border:1px solid #ddd;border-radius:6px;">
+    <strong>Welke analyses wil je uitvoeren?</strong>
+
+    <div style="margin-top:10px;">
+      <label>
+        <input type="checkbox" id="chk-plu" checked>
+        <strong>Planologisch (PLU / zonering)</strong>
+      </label>
+      <div style="margin-left:22px;color:#555;">
+        Bron: Géoportail de l’Urbanisme · Slagingskans: <strong>laag–middel</strong><br>
+        Indicatie of er een PLU/carte communale bestaat (geen rechten).
+      </div>
+    </div>
+
+    <div style="margin-top:10px;">
+      <label>
+        <input type="checkbox" id="chk-risk" checked>
+        <strong>Risico’s (overstroming, bosbrand, bodem)</strong>
+      </label>
+      <div style="margin-left:22px;color:#555;">
+        Bron: GéoRisques · Slagingskans: <strong>hoog</strong><br>
+        Bekende PPRN-risico’s op gemeenteniveau.
+      </div>
+    </div>
+
+    <div style="margin-top:10px;">
+      <label>
+        <input type="checkbox" id="chk-context" checked>
+        <strong>Planologische context (wonen / bedrijvigheid)</strong>
+      </label>
+      <div style="margin-left:22px;color:#555;">
+        Bron: IGN Carto · Slagingskans: <strong>middel</strong><br>
+        Functies in de omgeving (geen voorspellingen).
+      </div>
+    </div>
+
+    <div style="margin-top:10px;">
+      <label>
+        <input type="checkbox" id="chk-cad">
+        <strong>Perceel / cadastre (geavanceerd)</strong>
+      </label>
+      <div style="margin-left:22px;color:#555;">
+        Bron: IGN Carto · Slagingskans: <strong>laag</strong><br>
+        Ligging t.o.v. zones; geen bouwrechten.
+      </div>
+    </div>
   </div>
 
   <!-- Invoer -->
   <div style="margin:20px 0;">
-    <label for="loc" style="font-weight:bold;">Waar wil je bouwen?</label><br>
-    <input id="loc" type="text" placeholder="Postcode of gemeente"
-           style="padding:10px;width:100%;max-width:320px;">
+    <label for="loc" style="font-weight:bold;">Postcode of gemeente</label><br>
+    <input id="loc" type="text" placeholder="Bijv. 62170 of Montreuil"
+           style="padding:10px;width:100%;max-width:360px;">
     <br><br>
     <button id="checkBtn"
             style="padding:10px 16px;background:#800000;color:#fff;border:0;border-radius:4px;">
-      Controleer
+      Analyse uitvoeren
     </button>
   </div>
 
   <!-- Resultaat -->
   <div id="result"
-       style="margin-top:30px;padding:16px;border:1px solid #ddd;border-radius:6px;display:none;">
+       style="margin-top:28px;padding:16px;border:1px solid #ddd;border-radius:6px;display:none;">
   </div>
+
+  <p style="margin-top:16px;font-size:0.9em;color:#555;">
+    Indicatief. Geen bouwrecht. Definitieve zekerheid uitsluitend via
+    <strong>Certificat d’Urbanisme</strong> en de <strong>mairie</strong>.
+  </p>
 
 </div>
 
-<!-- Koppeling met API (en UI-logica) -->
 <script src="/embed.js"></script>
 
 </body>
