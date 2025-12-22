@@ -1,213 +1,113 @@
-// /embed.js
 (function () {
-  const btn = document.getElementById("checkBtn");
   const input = document.getElementById("loc");
+  const btn = document.getElementById("checkBtn");
   const result = document.getElementById("result");
+  const suggestBox = document.getElementById("ban-suggest");
 
-  const chkPLU = document.getElementById("chk-plu");
-  const chkRisk = document.getElementById("chk-risk");
-  const chkContext = document.getElementById("chk-context");
-  const chkCad = document.getElementById("chk-cad");
+  let map = L.map("map").setView([46.6, 2.4], 6);
+  let marker = null;
 
-  if (!btn || !input || !result) return;
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "© OpenStreetMap",
+    maxZoom: 19,
+  }).addTo(map);
 
-  function esc(s) {
-    return String(s ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
+  function setMarker(lat, lon, label) {
+    if (marker) map.removeLayer(marker);
+    marker = L.marker([lat, lon]).addTo(map);
+    if (label) marker.bindPopup(label).openPopup();
+    map.setView([lat, lon], 14);
   }
 
-  function pill(status) {
-    const s = (status || "").toLowerCase();
-    if (s.includes("beschikbaar")) return "🟢 beschikbaar";
-    if (s.includes("traag") || s.includes("beperkt")) return "🟠 beperkt";
-    if (s.includes("niet")) return "🔴 niet beschikbaar";
-    return "⚪ status";
-  }
+  /* ---------------- BAN AUTOCOMPLETE ---------------- */
 
-  function section(title, meta, linkText) {
-    const statusText = pill(meta?.status);
-    const msg = meta?.message ? `<p style="margin:6px 0 0;">${esc(meta.message)}</p>` : "";
-    const link = meta?.sourceUrl
-      ? `<p style="margin:8px 0 0;">
-           <a href="${meta.sourceUrl}" target="_blank" rel="noopener noreferrer">${esc(linkText)} →</a>
-         </p>`
-      : "";
-    return `
-      <div style="margin-top:14px;padding-top:10px;border-top:1px solid #eee;">
-        <h3 style="margin:0;color:#800000;">${esc(title)}</h3>
-        <p style="margin:6px 0 0;"><strong>Status:</strong> ${statusText}</p>
-        ${msg}
-        ${link}
-      </div>
-    `;
-  }
+  let banTimer = null;
 
-  function fallbackLinksBlock(q) {
-    const qp = encodeURIComponent(q || "");
-    return `
-      <div style="margin-top:12px;padding-top:10px;border-top:1px solid #eee;">
-        <h3 style="margin:0;color:#800000;">Alternatieve routes (officieel)</h3>
-        <ul style="margin:8px 0 0;">
-          <li><a href="https://www.geoportail-urbanisme.gouv.fr/" target="_blank" rel="noopener noreferrer">Géoportail de l’Urbanisme →</a></li>
-          <li><a href="https://www.georisques.gouv.fr/" target="_blank" rel="noopener noreferrer">GéoRisques →</a></li>
-          <li><a href="https://www.geoportail.gouv.fr/" target="_blank" rel="noopener noreferrer">IGN kaartviewer →</a></li>
-          <li><a href="https://www.cadastre.gouv.fr/" target="_blank" rel="noopener noreferrer">Cadastre →</a></li>
-        </ul>
-        <p style="margin:10px 0 0;color:#555;font-size:.95em;">
-          Technische check: <a href="/api/check?q=${qp}" target="_blank" rel="noopener noreferrer">open API-output →</a>
-        </p>
-      </div>
-    `;
-  }
+  input.addEventListener("input", function () {
+    const q = input.value.trim();
+    clearTimeout(banTimer);
+
+    if (q.length < 3) {
+      suggestBox.style.display = "none";
+      return;
+    }
+
+    banTimer = setTimeout(async () => {
+      try {
+        const r = await fetch(
+          `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=5`
+        );
+        const data = await r.json();
+
+        if (!data.features || !data.features.length) {
+          suggestBox.style.display = "none";
+          return;
+        }
+
+        suggestBox.innerHTML = data.features
+          .map(
+            (f) =>
+              `<div data-lat="${f.geometry.coordinates[1]}"
+                    data-lon="${f.geometry.coordinates[0]}"
+                    style="padding:6px;cursor:pointer;border-bottom:1px solid #eee;">
+                ${f.properties.label}
+              </div>`
+          )
+          .join("");
+
+        suggestBox.style.display = "block";
+      } catch {
+        suggestBox.style.display = "none";
+      }
+    }, 300);
+  });
+
+  suggestBox.addEventListener("click", function (e) {
+    const d = e.target.closest("div");
+    if (!d) return;
+
+    const lat = parseFloat(d.dataset.lat);
+    const lon = parseFloat(d.dataset.lon);
+    const label = d.textContent;
+
+    input.value = label;
+    suggestBox.style.display = "none";
+    setMarker(lat, lon, label);
+  });
+
+  /* ---------------- ANALYSE ---------------- */
 
   btn.addEventListener("click", async function () {
     const q = input.value.trim();
     if (!q) return;
 
-    const wantPLU = chkPLU ? !!chkPLU.checked : true;
-    const wantRisk = chkRisk ? !!chkRisk.checked : true;
-    const wantContext = chkContext ? !!chkContext.checked : true;
-    const wantCad = chkCad ? !!chkCad.checked : false;
-
     result.style.display = "block";
     result.innerHTML = "<p>Analyse wordt uitgevoerd…</p>";
 
-    let r, text, data;
-
     try {
-      r = await fetch(`/api/check?q=${encodeURIComponent(q)}`, { cache: "no-store" });
-      text = await r.text();
+      const r = await fetch(`/api/check?q=${encodeURIComponent(q)}`);
+      const data = await r.json();
 
-      // Alleen JSON proberen als het er ook uitziet als JSON
-      const ct = (r.headers.get("content-type") || "").toLowerCase();
-      const looksJson = ct.includes("application/json") || /^\s*[\[{]/.test(text);
-
-      if (!r.ok) {
-        result.innerHTML = `
-          <h2 style="color:#800000;margin:0 0 6px;">Resultaat</h2>
-          <p><strong>Fout:</strong> API antwoord ${r.status}.</p>
-          <p style="color:#555;">${esc(text.slice(0, 160))}${text.length > 160 ? "…" : ""}</p>
-          ${fallbackLinksBlock(q)}
-          <p style="margin-top:14px;font-size:.9em;color:#555;">
-            Indicatief. Definitieve zekerheid via Certificat d’Urbanisme en mairie.
-          </p>
-        `;
-        return;
-      }
-
-      if (!looksJson) {
-        result.innerHTML = `
-          <h2 style="color:#800000;margin:0 0 6px;">Resultaat</h2>
-          <p><strong>Fout:</strong> de server gaf geen JSON terug (waarschijnlijk een tijdelijke serverpagina).</p>
-          <p style="color:#555;">${esc(text.slice(0, 160))}${text.length > 160 ? "…" : ""}</p>
-          ${fallbackLinksBlock(q)}
-          <p style="margin-top:14px;font-size:.9em;color:#555;">
-            Indicatief. Definitieve zekerheid via Certificat d’Urbanisme en mairie.
-          </p>
-        `;
-        return;
-      }
-
-      data = JSON.parse(text);
-
-      if (data.error) {
-        result.innerHTML = `
-          <h2 style="color:#800000;margin:0 0 6px;">Resultaat</h2>
-          <p><strong>Fout:</strong> ${esc(data.error)}</p>
-          ${fallbackLinksBlock(q)}
-          <p style="margin-top:14px;font-size:.9em;color:#555;">
-            Indicatief. Definitieve zekerheid via Certificat d’Urbanisme en mairie.
-          </p>
-        `;
-        return;
-      }
-
-      // Render normaal (per onderdeel onafhankelijk)
       let html = `
-        <h2 style="color:#800000;margin:0 0 6px;">Resultaat</h2>
-        <p style="margin:0 0 8px;"><strong>Input:</strong> ${esc(data.query || q)}</p>
-        <p style="margin:0 0 10px;"><strong>Samenvatting:</strong> ${esc(data.summary?.status || data.samenvatting?.status || "indicatief")}</p>
-        <p style="margin:0 0 10px;color:#555;">${esc(data.summary?.note || "")}</p>
+        <h2 style="color:#800000;">Resultaat</h2>
+        <p><strong>Invoer:</strong> ${q}</p>
+        <p><strong>Status:</strong> ${data.summary?.status || "indicatief"}</p>
       `;
 
-      // Als je API de nieuwe structuur heeft: data.results.*
-      const R = data.results || {};
-
-      if (wantPLU) {
-        html += section(
-          "Planologisch (PLU / zonering)",
-          R.plu || {
-            status: "momenteel niet beschikbaar",
-            message: "Geen automatische output voor PLU. Gebruik de officiële bron.",
-            sourceUrl: "https://www.geoportail-urbanisme.gouv.fr/",
-          },
-          "Géoportail de l’Urbanisme"
-        );
-      }
-
-      if (wantRisk) {
-        html += section(
-          "Risico’s (overstroming, bosbrand, bodem)",
-          R.risk || {
-            status: "beschikbaar",
-            message: "Gebruik GéoRisques voor details op kaartniveau.",
-            sourceUrl: "https://www.georisques.gouv.fr/",
-          },
-          "GéoRisques"
-        );
-      }
-
-      if (wantContext) {
-        html += section(
-          "Planologische context (wonen / bedrijvigheid)",
-          R.context || {
-            status: "beschikbaar",
-            message: "Open de officiële kaartviewer voor lagen en omgeving.",
-            sourceUrl: "https://www.geoportail.gouv.fr/",
-          },
-          "IGN kaartviewer"
-        );
-      }
-
-      if (wantCad) {
-        html += section(
-          "Perceel / cadastre (geavanceerd)",
-          R.cad || {
-            status: "beschikbaar",
-            message: "Open Cadastre voor perceel-info (automatisering volgt later).",
-            sourceUrl: "https://www.cadastre.gouv.fr/",
-          },
-          "Cadastre"
-        );
-      }
-
-      if (Array.isArray(data.wat_nu_doen)) {
+      for (const [key, item] of Object.entries(data.results || {})) {
         html += `
-          <div style="margin-top:16px;padding-top:10px;border-top:1px solid #eee;">
-            <h3 style="margin:0;color:#800000;">Wat nu doen</h3>
-            <ol style="margin:8px 0 0;">
-              ${data.wat_nu_doen.map((x) => `<li>${esc(x)}</li>`).join("")}
-            </ol>
+          <div style="margin-top:12px;border-top:1px solid #eee;padding-top:8px;">
+            <strong>${key.toUpperCase()}</strong><br>
+            ${item.status}<br>
+            ${item.message || ""}
+            ${item.sourceUrl ? `<br><a href="${item.sourceUrl}" target="_blank">${item.sourceUrl}</a>` : ""}
           </div>
         `;
       }
 
-      html += `<p style="margin-top:14px;font-size:.9em;color:#555;">${esc(data.disclaimer || "Indicatief. Definitieve zekerheid via Certificat d’Urbanisme en mairie.")}</p>`;
-
       result.innerHTML = html;
     } catch (e) {
-      result.innerHTML = `
-        <h2 style="color:#800000;margin:0 0 6px;">Resultaat</h2>
-        <p><strong>Fout:</strong> ${esc(e.message || String(e))}</p>
-        ${fallbackLinksBlock(q)}
-        <p style="margin-top:14px;font-size:.9em;color:#555;">
-          Indicatief. Definitieve zekerheid via Certificat d’Urbanisme en mairie.
-        </p>
-      `;
+      result.innerHTML = "<p>Analyse tijdelijk niet beschikbaar.</p>";
     }
   });
 })();
