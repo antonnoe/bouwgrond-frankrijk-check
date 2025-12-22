@@ -4,14 +4,22 @@
 <meta charset="utf-8">
 <title>Bouwgrond & Omgevingsanalyse – Frankrijk</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Leaflet -->
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+/>
+
 </head>
 
 <body style="font-family: Mulish, Arial, sans-serif; line-height:1.8; color:#111; background:#fff;">
 
-<div style="max-width:980px;margin:0 auto;padding:18px;">
+<div style="max-width:1100px;margin:0 auto;padding:18px;">
 
   <h1 style="color:#800000;">Bouwgrond & Omgevingsanalyse – Frankrijk</h1>
-  <p style="max-width:820px;">
+
+  <p>
     Oriëntatie-instrument voor <strong>kopers</strong> én <strong>huiseigenaren</strong>.
     Automatisch waar mogelijk, transparant waar niet.
   </p>
@@ -20,54 +28,37 @@
   <div style="margin:20px 0;padding:14px;border:1px solid #ddd;border-radius:6px;">
     <strong>Welke analyses wil je uitvoeren?</strong>
 
-    <div style="margin-top:10px;">
-      <label><input type="checkbox" id="chk-plu" checked>
-        <strong>Planologisch (PLU / zonering)</strong></label>
-      <div style="margin-left:22px;color:#555;">
-        Bron: Géoportail de l’Urbanisme · Slagingskans: <strong>laag–middel</strong>
-      </div>
-    </div>
-
-    <div style="margin-top:10px;">
-      <label><input type="checkbox" id="chk-risk" checked>
-        <strong>Risico’s (overstroming, bosbrand, bodem)</strong></label>
-      <div style="margin-left:22px;color:#555;">
-        Bron: GéoRisques · Slagingskans: <strong>hoog</strong>
-      </div>
-    </div>
-
-    <div style="margin-top:10px;">
-      <label><input type="checkbox" id="chk-context" checked>
-        <strong>Planologische context (wonen / bedrijvigheid)</strong></label>
-      <div style="margin-left:22px;color:#555;">
-        Bron: IGN Carto · Slagingskans: <strong>middel</strong>
-      </div>
-    </div>
-
-    <div style="margin-top:10px;">
-      <label><input type="checkbox" id="chk-cad">
-        <strong>Perceel / cadastre (geavanceerd)</strong></label>
-      <div style="margin-left:22px;color:#555;">
-        Bron: IGN Carto · Slagingskans: <strong>laag</strong>
-      </div>
-    </div>
+    <div><label><input type="checkbox" id="chk-plu" checked> Planologisch (PLU / zonering)</label></div>
+    <div><label><input type="checkbox" id="chk-risk" checked> Risico’s (overstroming, bosbrand, bodem)</label></div>
+    <div><label><input type="checkbox" id="chk-context" checked> Planologische context</label></div>
+    <div><label><input type="checkbox" id="chk-cad"> Perceel / cadastre</label></div>
   </div>
 
-  <!-- INVOER -->
-  <div style="margin:20px 0;">
-    <label for="loc" style="font-weight:bold;">Postcode, plaats of adres</label><br>
-    <input id="loc" type="text" placeholder="Bijv. 62170 of Montreuil"
-           style="padding:10px;width:100%;max-width:420px;">
+  <!-- ADRES -->
+  <div style="margin:20px 0; position:relative;">
+    <label style="font-weight:bold;">Adres, plaats of postcode</label><br>
+    <input id="loc" type="text"
+      placeholder="Begin met typen (BAN)"
+      style="padding:10px;width:100%;max-width:520px;">
+    <div id="ban-suggest"
+      style="position:absolute;z-index:999;background:#fff;border:1px solid #ccc;
+             max-width:520px;display:none;"></div>
+
     <br><br>
     <button id="checkBtn"
-            style="padding:10px 18px;background:#800000;color:#fff;border:0;border-radius:4px;">
+      style="padding:10px 18px;background:#800000;color:#fff;border:0;border-radius:4px;">
       Analyse uitvoeren
     </button>
   </div>
 
+  <!-- MAP -->
+  <h2 style="color:#800000;">Kaart & omgeving</h2>
+  <div id="map"
+    style="height:380px;border:1px solid #ccc;border-radius:6px;"></div>
+
   <!-- RESULTAAT -->
   <div id="result"
-       style="margin-top:28px;padding:16px;border:1px solid #ddd;border-radius:6px;display:none;">
+    style="margin-top:28px;padding:16px;border:1px solid #ddd;border-radius:6px;display:none;">
   </div>
 
   <p style="margin-top:18px;font-size:0.9em;color:#555;">
@@ -77,6 +68,8 @@
 
 </div>
 
+<!-- Leaflet -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="/embed.js"></script>
 
 </body>
