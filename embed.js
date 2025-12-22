@@ -11,6 +11,7 @@
 
   let selectedLat = null;
   let selectedLon = null;
+  let selectedLabel = null;
 
   /* ================= MAP ================= */
 
@@ -27,6 +28,7 @@
     map.setView([lat, lon], 15);
     selectedLat = lat;
     selectedLon = lon;
+    selectedLabel = label;
   }
 
   /* ===== IGN WMS LAYERS (visueel) ===== */
@@ -97,8 +99,11 @@
           <div data-lat="${f.geometry.coordinates[1]}"
                data-lon="${f.geometry.coordinates[0]}"
                data-label="${f.properties.label}"
+               data-city="${f.properties.city || ''}"
+               data-postcode="${f.properties.postcode || ''}"
                style="padding:8px 10px;cursor:pointer;border-bottom:1px solid #eee;">
             ${f.properties.label}
+            <span style="color:#888;font-size:.85em;"> (${f.properties.postcode || ''} ${f.properties.city || ''})</span>
           </div>`
           )
           .join("");
@@ -120,11 +125,18 @@
     setMarker(lat, lon, label);
   });
 
+  // Sluit suggesties bij klik buiten
+  document.addEventListener("click", (e) => {
+    if (!suggestBox.contains(e.target) && e.target !== input) {
+      suggestBox.style.display = "none";
+    }
+  });
+
   /* ================= ANALYZE BUTTON ================= */
 
   checkBtn.addEventListener("click", () => {
     if (selectedLat && selectedLon) {
-      runAnalysis(selectedLat, selectedLon);
+      runAnalysis(selectedLat, selectedLon, selectedLabel);
     } else {
       result.innerHTML = `<p style="color:#800000;"><strong>Selecteer eerst een adres uit de lijst of klik op de kaart.</strong></p>`;
     }
@@ -135,16 +147,18 @@
   map.on("click", async (e) => {
     const lat = e.latlng.lat;
     const lon = e.latlng.lng;
-    setMarker(lat, lon, `${lat.toFixed(5)}, ${lon.toFixed(5)}`);
-    input.value = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
-    runAnalysis(lat, lon);
+    const label = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    setMarker(lat, lon, label);
+    input.value = label;
+    runAnalysis(lat, lon, label);
   });
 
   /* ================= CORE ANALYSIS FUNCTION ================= */
 
-  async function runAnalysis(lat, lon) {
+  async function runAnalysis(lat, lon, label) {
     result.innerHTML = `
       <h4 style="color:#800000;">Analyse bezig…</h4>
+      <p><strong>Geselecteerd:</strong> ${label || "Onbekend"}</p>
       <p><strong>Coördinaten:</strong> ${lat.toFixed(5)}, ${lon.toFixed(5)}</p>
       <p>Even geduld, gegevens worden opgehaald…</p>
     `;
@@ -158,6 +172,7 @@
         return;
       }
 
+      data._debug = { lat, lon, label };
       renderResults(data);
     } catch (e) {
       result.innerHTML = `<p style="color:#c00;"><strong>Verbindingsfout:</strong> ${e.message}</p>`;
@@ -168,6 +183,16 @@
 
   function renderResults(data) {
     let html = `<h4 style="color:#800000;">Analyseresultaat</h4>`;
+
+    // Debug info - geselecteerde locatie
+    if (data._debug) {
+      html += `
+        <div style="background:#f0f0f0;padding:8px 12px;border-radius:4px;margin-bottom:12px;font-size:.85em;">
+          <strong>Geanalyseerd:</strong> ${data._debug.label || "Onbekend"}<br>
+          <strong>Coördinaten:</strong> ${data._debug.lat.toFixed(5)}, ${data._debug.lon.toFixed(5)}
+        </div>
+      `;
+    }
 
     // Samenvatting
     if (data.summary) {
