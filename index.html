@@ -1,115 +1,82 @@
-(function () {
-  const input = document.getElementById("loc");
-  const btn = document.getElementById("checkBtn");
-  const result = document.getElementById("result");
-  const suggestBox = document.getElementById("ban-suggest");
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Bouwgrond & Omgevingsanalyse – Frankrijk</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
-  const chkOCS = document.getElementById("chk-ocs");
-  const chkB = document.getElementById("chk-buildings");
-  const chkT = document.getElementById("chk-transport");
-  const chkH = document.getElementById("chk-hydro");
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
-  /* ================= MAPS ================= */
+</head>
+<body style="font-family: Mulish, Arial, sans-serif; line-height:1.8; color:#111; background:#fff;">
 
-  const map = L.map("map").setView([46.6, 2.4], 6);
-  const mapSide = L.map("map-side", { zoomControl:false }).setView([46.6, 2.4], 6);
+<div style="max-width:1200px;margin:0 auto;padding:18px;">
 
-  const base = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    { attribution:"© OpenStreetMap" }).addTo(map);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(mapSide);
+  <h1 style="color:#800000;">Bouwgrond & Omgevingsanalyse – Frankrijk</h1>
 
-  let marker = null;
-  function setMarker(lat, lon, label){
-    if(marker){ map.removeLayer(marker); mapSide.removeLayer(marker); }
-    marker = L.marker([lat, lon]).addTo(map).bindPopup(label).openPopup();
-    L.marker([lat, lon]).addTo(mapSide);
-    map.setView([lat, lon], 15);
-    mapSide.setView([lat, lon], 15);
-  }
+  <!-- BAN -->
+  <div style="margin:14px 0; position:relative;">
+    <label style="font-weight:bold;">Adres, plaats of postcode (BAN)</label><br>
+    <input id="loc" type="text" placeholder="Begin met typen…"
+      style="padding:10px;width:100%;max-width:520px;">
+    <div id="ban-suggest"
+      style="position:absolute;z-index:1000;background:#fff;border:1px solid #ccc;max-width:520px;display:none;"></div>
+    <br><br>
+    <button id="checkBtn"
+      style="padding:10px 18px;background:#800000;color:#fff;border:0;border-radius:4px;">
+      Analyse uitvoeren
+    </button>
+  </div>
 
-  /* ===== STABIELE IGN LAGEN ===== */
+  <!-- KAART VOLLE BREEDTE -->
+  <h2 style="color:#800000;">Kaart</h2>
+  <div id="map" style="height:420px;border:1px solid #ccc;border-radius:6px;"></div>
 
-  const ignBase = "https://wxs.ign.fr/essentiels/geoportail/r/wms";
+  <!-- SPLIT VIEW -->
+  <div style="display:flex;gap:18px;margin-top:22px;align-items:flex-start;">
 
-  const ocs = L.tileLayer.wms(ignBase, {
-    layers:"OCSGE_2019",
-    transparent:true, format:"image/png"
-  }).addTo(map);
+    <!-- LINKS: RESULTAAT -->
+    <div style="flex:1;border:1px solid #ddd;border-radius:6px;padding:14px;">
+      <h3 style="color:#800000;margin-top:0;">Resultaat & vervolgstappen</h3>
 
-  const buildings = L.tileLayer.wms(ignBase, {
-    layers:"BATIMENTS",
-    transparent:true, format:"image/png"
-  }).addTo(map);
+      <div style="margin-bottom:10px;">
+        <strong>Toon lagen:</strong><br>
+        <label><input type="checkbox" id="chk-ocs" checked> Landgebruik (OCS)</label><br>
+        <label><input type="checkbox" id="chk-buildings" checked> Bebouwing</label><br>
+        <label><input type="checkbox" id="chk-transport"> Infrastructuur</label><br>
+        <label><input type="checkbox" id="chk-hydro"> Waterlopen</label>
+      </div>
 
-  const transport = L.tileLayer.wms(ignBase, {
-    layers:"TRANSPORTS",
-    transparent:true, format:"image/png"
-  });
+      <div id="result">
+        <p>Klik op de kaart om context te bekijken of voer een locatie in.</p>
+      </div>
 
-  const hydro = L.tileLayer.wms(ignBase, {
-    layers:"HYDROGRAPHIE",
-    transparent:true, format:"image/png"
-  });
+      <hr>
 
-  function syncLayers(){
-    chkOCS.checked ? map.addLayer(ocs) : map.removeLayer(ocs);
-    chkB.checked ? map.addLayer(buildings) : map.removeLayer(buildings);
-    chkT.checked ? map.addLayer(transport) : map.removeLayer(transport);
-    chkH.checked ? map.addLayer(hydro) : map.removeLayer(hydro);
-  }
-  [chkOCS,chkB,chkT,chkH].forEach(c=>c.addEventListener("change",syncLayers));
-
-  /* ===== BAN AUTOCOMPLETE ===== */
-
-  let banTimer=null;
-  input.addEventListener("input",()=>{
-    const q=input.value.trim(); clearTimeout(banTimer);
-    if(q.length<3){ suggestBox.style.display="none"; return; }
-    banTimer=setTimeout(async()=>{
-      try{
-        const r=await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=5`);
-        const d=await r.json();
-        if(!d.features?.length){ suggestBox.style.display="none"; return; }
-        suggestBox.innerHTML=d.features.map(f=>
-          `<div data-lat="${f.geometry.coordinates[1]}" data-lon="${f.geometry.coordinates[0]}"
-            style="padding:6px;cursor:pointer;border-bottom:1px solid #eee;">${f.properties.label}</div>`
-        ).join("");
-        suggestBox.style.display="block";
-      }catch{ suggestBox.style.display="none"; }
-    },300);
-  });
-
-  suggestBox.addEventListener("click",e=>{
-    const d=e.target.closest("div"); if(!d)return;
-    const lat=+d.dataset.lat, lon=+d.dataset.lon, label=d.textContent;
-    input.value=label; suggestBox.style.display="none";
-    setMarker(lat,lon,label);
-  });
-
-  /* ===== KLIK OP KAART = CONTEXT ===== */
-
-  map.on("click", (e)=>{
-    const {lat,lng}=e.latlng;
-    result.innerHTML = `
-      <h4>Context (indicatief)</h4>
-      <p><strong>Locatie:</strong> ${lat.toFixed(5)}, ${lng.toFixed(5)}</p>
+      <h4>Officiële bronnen</h4>
       <ul>
-        <li>Landgebruik & bebouwing: visueel op kaart (IGN OCS / Bâtiments)</li>
-        <li>Infrastructuur / waterlopen: optionele lagen</li>
+        <li><a href="https://www.geoportail-urbanisme.gouv.fr/" target="_blank">Géoportail de l’Urbanisme (PLU)</a></li>
+        <li><a href="https://www.georisques.gouv.fr/" target="_blank">GéoRisques</a></li>
+        <li><a href="https://www.cadastre.gouv.fr/" target="_blank">Cadastre</a></li>
+        <li><a href="https://www.geoportail.gouv.fr/" target="_blank">IGN kaartviewer</a></li>
       </ul>
-      <p><strong>Controleer officieel:</strong></p>
-      <ul>
-        <li><a target="_blank" href="https://www.geoportail-urbanisme.gouv.fr/">PLU (GPU)</a></li>
-        <li><a target="_blank" href="https://www.georisques.gouv.fr/">Risico’s</a></li>
-        <li><a target="_blank" href="https://www.cadastre.gouv.fr/">Cadastre</a></li>
-      </ul>
-    `;
-  });
 
-  /* ===== ANALYSE BUTTON (fail-safe) ===== */
+      <p style="font-size:.9em;color:#555;">
+        Indicatief. Geen bouwrecht. Definitieve zekerheid via Certificat d’Urbanisme en mairie.
+      </p>
+    </div>
 
-  btn.addEventListener("click", async ()=>{
-    const q=input.value.trim(); if(!q)return;
-    result.innerHTML="<p>Analyse uitgevoerd. Gebruik kaart en context.</p>";
-  });
-})();
+    <!-- RECHTS: KAART (blijft zichtbaar) -->
+    <div style="flex:1;">
+      <div id="map-side" style="height:380px;"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/embed.js"></script>
+
+</body>
+</html>
