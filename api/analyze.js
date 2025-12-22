@@ -26,8 +26,15 @@ export default async function handler(req, res) {
     errors: [],
   };
 
+  // GeoJSON Point voor API Carto calls
+  const geoJsonPoint = {
+    type: "Point",
+    coordinates: [lon, lat],
+  };
+
   // ========== GEORISQUES: CATNAT + RISQUES ==========
   try {
+    // Georisques gebruikt latlon=lon,lat (let op: lon eerst!)
     const [catnatRes, risquesRes] = await Promise.all([
       fetch(
         `https://www.georisques.gouv.fr/api/v1/gaspar/catnat?rayon=1000&latlon=${lon},${lat}`
@@ -81,9 +88,12 @@ export default async function handler(req, res) {
 
   // ========== API CARTO GPU: PLU ZONE ==========
   try {
-    const gpuRes = await fetch(
-      `https://apicarto.ign.fr/api/gpu/zone-urba?lon=${lon}&lat=${lat}`
-    );
+    const gpuUrl = `https://apicarto.ign.fr/api/gpu/zone-urba?geom=${encodeURIComponent(
+      JSON.stringify(geoJsonPoint)
+    )}`;
+
+    const gpuRes = await fetch(gpuUrl);
+
     if (gpuRes.ok) {
       const gpu = await gpuRes.json();
       if (gpu.features?.length) {
@@ -94,6 +104,7 @@ export default async function handler(req, res) {
           typeZone: props.typezone || null,
           destdomi: props.destdomi || null,
           partition: props.partition || null,
+          idurba: props.idurba || null,
           message: `Zone: ${props.libelle || props.typezone || "n.v.t."}`,
           sourceUrl: "https://www.geoportail-urbanisme.gouv.fr/",
         };
@@ -105,7 +116,8 @@ export default async function handler(req, res) {
         };
       }
     } else {
-      throw new Error("HTTP " + gpuRes.status);
+      const errText = await gpuRes.text();
+      throw new Error(`HTTP ${gpuRes.status}: ${errText.substring(0, 100)}`);
     }
   } catch (e) {
     results.errors.push("plu: " + e.message);
@@ -118,9 +130,12 @@ export default async function handler(req, res) {
 
   // ========== API CARTO CADASTRE: PARCELLE ==========
   try {
-    const cadRes = await fetch(
-      `https://apicarto.ign.fr/api/cadastre/parcelle?lon=${lon}&lat=${lat}`
-    );
+    const cadUrl = `https://apicarto.ign.fr/api/cadastre/parcelle?geom=${encodeURIComponent(
+      JSON.stringify(geoJsonPoint)
+    )}`;
+
+    const cadRes = await fetch(cadUrl);
+
     if (cadRes.ok) {
       const cad = await cadRes.json();
       if (cad.features?.length) {
@@ -128,13 +143,14 @@ export default async function handler(req, res) {
         results.cadastre = {
           status: "ok",
           commune: props.nom_com || null,
-          codeInsee: props.code_insee || props.code_com || null,
+          codeInsee: props.code_dep + props.code_com || null,
           section: props.section || null,
           numero: props.numero || null,
           contenance: props.contenance || null,
+          feuille: props.feuille || null,
           reference: `${props.section || ""}${props.numero || ""}`,
-          message: `Parcelle ${props.section || ""}${props.numero || ""} - ${props.nom_com || ""}`,
-          sourceUrl: "https://www.cadastre.gouv.fr/",
+          message: `Parcelle ${props.section || ""}${props.numero || ""} - ${props.nom_com || "Onbekend"}`,
+          sourceUrl: `https://www.cadastre.gouv.fr/scpc/rechercherPlan.do`,
         };
       } else {
         results.cadastre = {
@@ -144,7 +160,8 @@ export default async function handler(req, res) {
         };
       }
     } else {
-      throw new Error("HTTP " + cadRes.status);
+      const errText = await cadRes.text();
+      throw new Error(`HTTP ${cadRes.status}: ${errText.substring(0, 100)}`);
     }
   } catch (e) {
     results.errors.push("cadastre: " + e.message);
@@ -170,7 +187,10 @@ function buildSummary(r) {
   // Georisques
   if (r.georisques?.catnat?.count > 5) {
     warnings.push(`Let op: ${r.georisques.catnat.count} catnat-arresten`);
+  } else if (r.georisques?.catnat?.count > 0) {
+    positives.push(`${r.georisques.catnat.count} catnat-arrest(en) - gemiddeld`);
   }
+
   if (r.georisques?.risques?.count > 0) {
     warnings.push(`Risico's: ${r.georisques.risques.types.join(", ")}`);
   } else if (r.georisques?.status === "ok") {
@@ -184,8 +204,10 @@ function buildSummary(r) {
       positives.push(`PLU-zone ${r.plu.zone} (bebouwd gebied)`);
     } else if (zone.startsWith("AU")) {
       positives.push(`PLU-zone ${r.plu.zone} (toekomstig bouwgebied)`);
-    } else if (zone.startsWith("A") || zone.startsWith("N")) {
-      warnings.push(`PLU-zone ${r.plu.zone} (landbouw/natuur - restrictief)`);
+    } else if (zone.startsWith("A")) {
+      warnings.push(`PLU-zone ${r.plu.zone} (landbouwzone - restrictief)`);
+    } else if (zone.startsWith("N")) {
+      warnings.push(`PLU-zone ${r.plu.zone} (natuurzone - zeer restrictief)`);
     } else {
       positives.push(`PLU-zone: ${r.plu.zone}`);
     }
