@@ -4,14 +4,66 @@
   const result = document.getElementById("result");
   const suggestBox = document.getElementById("ban-suggest");
 
-  let map = L.map("map").setView([46.6, 2.4], 6);
+  /* ================= MAP ================= */
+
+  const map = L.map("map").setView([46.6, 2.4], 6);
+
+  const baseOSM = L.tileLayer(
+    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    { attribution: "© OpenStreetMap" }
+  ).addTo(map);
+
+  // ---- STABIELE CARTO / IGN LAGEN ----
+  const ignOCS = L.tileLayer.wms(
+    "https://wxs.ign.fr/essentiels/geoportail/r/wms",
+    {
+      layers: "OCSGE_2019",
+      format: "image/png",
+      transparent: true,
+      attribution: "IGN – Occupation du sol",
+    }
+  );
+
+  const ignBuildings = L.tileLayer.wms(
+    "https://wxs.ign.fr/essentiels/geoportail/r/wms",
+    {
+      layers: "BATIMENTS",
+      format: "image/png",
+      transparent: true,
+      attribution: "IGN – Bâtiments",
+    }
+  );
+
+  const ignTransport = L.tileLayer.wms(
+    "https://wxs.ign.fr/essentiels/geoportail/r/wms",
+    {
+      layers: "TRANSPORTS",
+      format: "image/png",
+      transparent: true,
+      attribution: "IGN – Infrastructuur",
+    }
+  );
+
+  const ignHydro = L.tileLayer.wms(
+    "https://wxs.ign.fr/essentiels/geoportail/r/wms",
+    {
+      layers: "HYDROGRAPHIE",
+      format: "image/png",
+      transparent: true,
+      attribution: "IGN – Waterlopen",
+    }
+  );
+
+  const overlays = {
+    "Landgebruik (OCS)": ignOCS,
+    "Bebouwing": ignBuildings,
+    "Infrastructuur": ignTransport,
+    "Waterlopen": ignHydro,
+  };
+
+  L.control.layers(null, overlays, { collapsed: false }).addTo(map);
+
   let marker = null;
-
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "© OpenStreetMap",
-    maxZoom: 19,
-  }).addTo(map);
-
   function setMarker(lat, lon, label) {
     if (marker) map.removeLayer(marker);
     marker = L.marker([lat, lon]).addTo(map);
@@ -19,7 +71,7 @@
     map.setView([lat, lon], 14);
   }
 
-  /* ---------------- BAN AUTOCOMPLETE ---------------- */
+  /* ================= BAN AUTOCOMPLETE ================= */
 
   let banTimer = null;
 
@@ -75,39 +127,48 @@
     setMarker(lat, lon, label);
   });
 
-  /* ---------------- ANALYSE ---------------- */
+  /* ================= ANALYSE / LINKS ================= */
 
   btn.addEventListener("click", async function () {
     const q = input.value.trim();
     if (!q) return;
 
     result.style.display = "block";
-    result.innerHTML = "<p>Analyse wordt uitgevoerd…</p>";
+    result.innerHTML = `
+      <h2 style="color:#800000;">Resultaat & vervolgstappen</h2>
+      <p><strong>Locatie:</strong> ${q}</p>
 
-    try {
-      const r = await fetch(`/api/check?q=${encodeURIComponent(q)}`);
-      const data = await r.json();
+      <h3>Automatische analyse</h3>
+      <p>Deze tool toont stabiele contextlagen op de kaart. Voor juridische zekerheid gebruik je de officiële bronnen hieronder.</p>
 
-      let html = `
-        <h2 style="color:#800000;">Resultaat</h2>
-        <p><strong>Invoer:</strong> ${q}</p>
-        <p><strong>Status:</strong> ${data.summary?.status || "indicatief"}</p>
-      `;
+      <h3>Officiële bronnen (handmatig)</h3>
+      <ul>
+        <li>
+          <a href="https://www.geoportail-urbanisme.gouv.fr/" target="_blank">
+            Géoportail de l’Urbanisme (PLU / zonering)
+          </a>
+        </li>
+        <li>
+          <a href="https://www.georisques.gouv.fr/" target="_blank">
+            GéoRisques (overstroming, bosbrand, bodem)
+          </a>
+        </li>
+        <li>
+          <a href="https://www.cadastre.gouv.fr/" target="_blank">
+            Cadastre (perceelgegevens)
+          </a>
+        </li>
+        <li>
+          <a href="https://www.geoportail.gouv.fr/" target="_blank">
+            IGN kaartviewer (volledig)
+          </a>
+        </li>
+      </ul>
 
-      for (const [key, item] of Object.entries(data.results || {})) {
-        html += `
-          <div style="margin-top:12px;border-top:1px solid #eee;padding-top:8px;">
-            <strong>${key.toUpperCase()}</strong><br>
-            ${item.status}<br>
-            ${item.message || ""}
-            ${item.sourceUrl ? `<br><a href="${item.sourceUrl}" target="_blank">${item.sourceUrl}</a>` : ""}
-          </div>
-        `;
-      }
-
-      result.innerHTML = html;
-    } catch (e) {
-      result.innerHTML = "<p>Analyse tijdelijk niet beschikbaar.</p>";
-    }
+      <p style="font-size:.9em;color:#555;">
+        Indicatief. Geen bouwrecht. Definitieve zekerheid via
+        <strong>Certificat d’Urbanisme</strong> en de <strong>mairie</strong>.
+      </p>
+    `;
   });
 })();
