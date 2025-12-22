@@ -40,66 +40,12 @@
   <!-- Resultaat -->
   <div id="result"
        style="margin-top:30px;padding:16px;border:1px solid #ddd;border-radius:6px;display:none;">
-    <h2 style="color:#800000;">Resultaat</h2>
-
-    <p><strong>In principe:</strong> —</p>
-    <p>
-      <strong>Zone(s):</strong> U / AU / A / N
-      <span title="U = stedelijk | AU = te urbaniseren | A = agrarisch | N = natuur"
-            style="cursor:help;">[ i ]</span>
-    </p>
-
-    <h3>Aandachtspunten</h3>
-    <ul>
-      <li>Risico’s: —</li>
-      <li>Planologische context: —</li>
-    </ul>
-
-    <h3>Wat nu doen</h3>
-    <ol>
-      <li>Certificat d’Urbanisme aanvragen</li>
-      <li>Mairie raadplegen</li>
-      <li>Officiële documenten controleren</li>
-    </ol>
-
-    <p style="font-size:0.9em;color:#555;">
-      Indicatief. Geen bouwrecht. CU en mairie zijn beslissend.
-    </p>
   </div>
 
 </div>
 
-<script>
-(function(){
-  const radios = document.querySelectorAll('input[name="mode"]');
-  const btn = document.getElementById('checkBtn');
-  const result = document.getElementById('result');
-
-  function update(){
-    const v = document.querySelector('input[name="mode"]:checked')?.value;
-    if (!v){
-      btn.disabled = true;
-      btn.style.opacity = .5;
-      result.style.display = 'none';
-      return;
-    }
-    if (v === 'local'){
-      btn.disabled = false;
-      btn.style.opacity = 1;
-      result.style.display = 'block';
-    } else {
-      btn.disabled = true;
-      btn.style.opacity = .5;
-      result.style.display = 'block';
-      result.querySelector('p').innerHTML =
-        '<strong>Regionaal (reverse)</strong> komt in v2. Kies nu <em>Locatiespecifiek</em>.';
-    }
-  }
-
-  radios.forEach(r => r.addEventListener('change', update));
-  update();
-})();
-</script>
+<!-- Koppeling met API -->
+<script src="/api/embed.js"></script>
 
 </body>
 </html>
