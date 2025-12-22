@@ -99,11 +99,11 @@
           <div data-lat="${f.geometry.coordinates[1]}"
                data-lon="${f.geometry.coordinates[0]}"
                data-label="${f.properties.label}"
-               data-city="${f.properties.city || ''}"
-               data-postcode="${f.properties.postcode || ''}"
+               data-city="${f.properties.city || ""}"
+               data-postcode="${f.properties.postcode || ""}"
                style="padding:8px 10px;cursor:pointer;border-bottom:1px solid #eee;">
             ${f.properties.label}
-            <span style="color:#888;font-size:.85em;"> (${f.properties.postcode || ''} ${f.properties.city || ''})</span>
+            <span style="color:#888;font-size:.85em;"> (${f.properties.postcode || ""} ${f.properties.city || ""})</span>
           </div>`
           )
           .join("");
@@ -164,7 +164,8 @@
     `;
 
     try {
-      const res = await fetch(`/api/analyze?lat=${lat}&lon=${lon}`);
+      const adresseParam = encodeURIComponent(label || "");
+      const res = await fetch(`/api/analyze?lat=${lat}&lon=${lon}&adresse=${adresseParam}`);
       const data = await res.json();
 
       if (!data.ok) {
