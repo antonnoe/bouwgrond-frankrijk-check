@@ -1,62 +1,85 @@
-// /embed.js
 (function () {
   const btn = document.getElementById('checkBtn');
   const input = document.getElementById('loc');
   const result = document.getElementById('result');
-  const radios = document.querySelectorAll('input[name="mode"]');
 
-  if (!btn || !input || !result || !radios.length) return;
-
-  // init
-  btn.disabled = true;
-  btn.style.opacity = 0.5;
-
-  function updateMode() {
-    const mode = document.querySelector('input[name="mode"]:checked')?.value;
-    if (mode === 'local') {
-      btn.disabled = false;
-      btn.style.opacity = 1;
-      result.style.display = 'none';
-    } else {
-      btn.disabled = true;
-      btn.style.opacity = 0.5;
-      result.style.display = 'block';
-      result.innerHTML =
-        '<p><strong>Regionaal (reverse)</strong> komt in v2. Kies <em>Locatiespecifiek</em>.</p>';
-    }
-  }
-  radios.forEach(r => r.addEventListener('change', updateMode));
-  updateMode();
+  if (!btn || !input || !result) return;
 
   btn.addEventListener('click', async function () {
     const q = input.value.trim();
     if (!q) return;
 
+    const checks = {
+      plu: document.getElementById('chk-plu')?.checked,
+      risk: document.getElementById('chk-risk')?.checked,
+      context: document.getElementById('chk-context')?.checked,
+      cad: document.getElementById('chk-cad')?.checked
+    };
+
     result.style.display = 'block';
-    result.innerHTML = '<p>Bezig met controleren…</p>';
+    result.innerHTML = '<p>Analyse wordt uitgevoerd…</p>';
 
     try {
-      // 🔑 Gebruik ALLEEN ?q=
       const r = await fetch(`/api/check?q=${encodeURIComponent(q)}`);
-      if (!r.ok) {
-        result.innerHTML = `<p><strong>Fout:</strong> ${r.status}</p>`;
-        return;
-      }
       const data = await r.json();
 
-      if (data.error || !data.samenvatting) {
-        result.innerHTML = `<p><strong>Fout:</strong> ${data.error || 'Onverwachte response.'}</p>`;
+      if (data.error) {
+        result.innerHTML = `<p><strong>Fout:</strong> ${data.error}</p>`;
         return;
       }
 
-      result.innerHTML = `
+      let html = `
         <h2 style="color:#800000;">Resultaat</h2>
         <p><strong>In principe:</strong> ${data.samenvatting.status}</p>
-        <p><strong>Zone(s):</strong> ${data.samenvatting.zones.join(' / ')}</p>
+      `;
+
+      if (checks.plu) {
+        html += `
+          <h3>Planologisch</h3>
+          <p>${data.samenvatting.status === 'mogelijk'
+            ? 'Er is planologisch kader aanwezig (indicatief).'
+            : 'Geen planologisch kader gevonden (indicatief).'}</p>
+          <p><a href="https://www.geoportail-urbanisme.gouv.fr/" target="_blank">
+            Géoportail de l’Urbanisme →</a></p>
+        `;
+      }
+
+      if (checks.risk) {
+        html += `
+          <h3>Risico’s</h3>
+          <p>${data.aandachtspunten.risico_aanwezig
+            ? 'Bekende risico’s aanwezig.'
+            : 'Geen bekende risico’s gemeld.'}</p>
+          <p><a href="https://www.georisques.gouv.fr/" target="_blank">
+            GéoRisques →</a></p>
+        `;
+      }
+
+      if (checks.context) {
+        html += `
+          <h3>Planologische context</h3>
+          <p>Indicatie van functies in de omgeving (wonen / bedrijvigheid).</p>
+          <p><a href="https://www.geoportail.gouv.fr/" target="_blank">
+            IGN kaartviewer →</a></p>
+        `;
+      }
+
+      if (checks.cad) {
+        html += `
+          <h3>Perceel / cadastre</h3>
+          <p>Geavanceerde analyse. Automatisch mogelijk beperkt.</p>
+          <p><a href="https://www.cadastre.gouv.fr/" target="_blank">
+            Cadastre →</a></p>
+        `;
+      }
+
+      html += `
         <h3>Wat nu doen</h3>
         <ol>${data.wat_nu_doen.map(x => `<li>${x}</li>`).join('')}</ol>
         <p style="font-size:.9em;color:#555;">${data.disclaimer}</p>
       `;
+
+      result.innerHTML = html;
     } catch (e) {
       result.innerHTML = `<p><strong>Fout:</strong> ${e.message}</p>`;
     }
