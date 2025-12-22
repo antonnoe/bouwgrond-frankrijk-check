@@ -50,10 +50,11 @@ export default async function handler(req, res) {
       if (cad.features?.length) {
         const props = cad.features[0].properties;
         communeNaam = props.nom_com || "";
-        codeInsee = props.code_dep && props.code_com 
-          ? props.code_dep + props.code_com 
-          : (props.code_insee || "");
-        
+        codeInsee =
+          props.code_dep && props.code_com
+            ? props.code_dep + props.code_com
+            : props.code_insee || "";
+
         results.cadastre = {
           status: "ok",
           commune: communeNaam,
@@ -87,7 +88,6 @@ export default async function handler(req, res) {
 
   // ========== GEORISQUES: CATNAT + RISQUES ==========
   try {
-    // page_size=100 om meer resultaten te krijgen, en we gebruiken 'total' veld
     const [catnatRes, risquesRes] = await Promise.all([
       fetch(
         `https://www.georisques.gouv.fr/api/v1/gaspar/catnat?rayon=1000&latlon=${lon},${lat}&page_size=1`
@@ -100,10 +100,8 @@ export default async function handler(req, res) {
     const catnat = catnatRes.ok ? await catnatRes.json() : null;
     const risques = risquesRes.ok ? await risquesRes.json() : null;
 
-    // Gebruik 'total' veld voor het echte aantal, niet array length
     const catnatTotal = catnat?.total || catnat?.data?.length || 0;
-    
-    // Haal types op met een aparte call als er catnat zijn
+
     let catnatTypes = [];
     if (catnatTotal > 0) {
       try {
@@ -112,10 +110,12 @@ export default async function handler(req, res) {
         );
         const typesData = await typesRes.json();
         if (typesData?.data) {
-          catnatTypes = [...new Set(typesData.data.map((c) => c.libelle_risque_jo))].filter(Boolean);
+          catnatTypes = [
+            ...new Set(typesData.data.map((c) => c.libelle_risque_jo)),
+          ].filter(Boolean);
         }
       } catch {
-        // Negeer fout, we hebben al het totaal
+        // Negeer
       }
     }
 
@@ -124,8 +124,13 @@ export default async function handler(req, res) {
       .filter((r) => r.num_risque)
       .map((r) => r.libelle_risque_long || r.libelle_risque);
 
-    // Bouw correcte Georisques rapport URL
-    const geoRisquesUrl = buildGeorisquesUrl(lat, lon, adresse, communeNaam, codeInsee);
+    const geoRisquesUrl = buildGeorisquesUrl(
+      lat,
+      lon,
+      adresse,
+      communeNaam,
+      codeInsee
+    );
 
     results.georisques = {
       status: "ok",
@@ -168,6 +173,10 @@ export default async function handler(req, res) {
       const gpu = await gpuRes.json();
       if (gpu.features?.length) {
         const props = gpu.features[0].properties;
+        
+        // Exacte Geoportail de l'Urbanisme link
+        const gpuSourceUrl = `https://www.geoportail-urbanisme.gouv.fr/map/#/center/${lon}/${lat}/zoom/17`;
+
         results.plu = {
           status: "ok",
           zone: props.libelle || props.typezone || "Onbekend",
@@ -176,13 +185,13 @@ export default async function handler(req, res) {
           partition: props.partition || null,
           idurba: props.idurba || null,
           message: `Zone: ${props.libelle || props.typezone || "n.v.t."}`,
-          sourceUrl: "https://www.geoportail-urbanisme.gouv.fr/",
+          sourceUrl: gpuSourceUrl,
         };
       } else {
         results.plu = {
           status: "no_data",
           message: "Geen PLU-data beschikbaar (mogelijk RNU-gemeente)",
-          sourceUrl: "https://www.geoportail-urbanisme.gouv.fr/",
+          sourceUrl: `https://www.geoportail-urbanisme.gouv.fr/map/#/center/${lon}/${lat}/zoom/14`,
         };
       }
     } else {
@@ -208,12 +217,12 @@ export default async function handler(req, res) {
 function buildGeorisquesUrl(lat, lon, adresse, city, codeInsee) {
   const params = new URLSearchParams({
     "form-adresse": "true",
-    "isCadastre": "false",
-    "lon": lon.toString(),
-    "lat": lat.toString(),
-    "go_back": "/",
-    "propertiesType": "street",
-    "typeForm": "adresse",
+    isCadastre: "false",
+    lon: lon.toString(),
+    lat: lat.toString(),
+    go_back: "/",
+    propertiesType: "street",
+    typeForm: "adresse",
   });
 
   if (city) params.set("city", city);
@@ -232,7 +241,10 @@ function buildSummary(r) {
     warnings.push(`Let op: ${r.georisques.catnat.count} catnat-arresten`);
   } else if (r.georisques?.catnat?.count > 0) {
     positives.push(`${r.georisques.catnat.count} catnat-arrest(en)`);
-  } else if (r.georisques?.status === "ok" && r.georisques?.catnat?.count === 0) {
+  } else if (
+    r.georisques?.status === "ok" &&
+    r.georisques?.catnat?.count === 0
+  ) {
     positives.push("Geen catnat-arresten");
   }
 
