@@ -6,6 +6,7 @@
 
   const chkOCS = document.getElementById("chk-ocs");
   const chkB = document.getElementById("chk-buildings");
+  const chkOrtho = document.getElementById("chk-ortho");
   const chkT = document.getElementById("chk-transport");
   const chkH = document.getElementById("chk-hydro");
 
@@ -18,7 +19,7 @@
   const map = L.map("map").setView([46.6, 2.4], 6);
 
   // Basislaag: OpenStreetMap
-  const osmBase = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "© OpenStreetMap",
   }).addTo(map);
 
@@ -26,7 +27,7 @@
   function setMarker(lat, lon, label) {
     if (marker) map.removeLayer(marker);
     marker = L.marker([lat, lon]).addTo(map).bindPopup(label).openPopup();
-    map.setView([lat, lon], 15);
+    map.setView([lat, lon], 17);
     selectedLat = lat;
     selectedLon = lon;
     selectedLabel = label;
@@ -34,7 +35,6 @@
 
   /* ===== IGN GEOPLATEFORME WMTS LAYERS ===== */
 
-  // WMTS endpoint (stabieler dan WMS)
   const WMTS_URL = "https://data.geopf.fr/wmts";
 
   // Kadastrale percelen
@@ -43,7 +43,7 @@
     {
       attribution: "© IGN",
       opacity: 0.7,
-      maxZoom: 19,
+      maxZoom: 20,
     }
   ).addTo(map);
 
@@ -52,7 +52,7 @@
     `${WMTS_URL}?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}`,
     {
       attribution: "© IGN",
-      opacity: 0.6,
+      opacity: 0.7,
       maxZoom: 19,
     }
   );
@@ -62,8 +62,8 @@
     `${WMTS_URL}?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}`,
     {
       attribution: "© IGN",
-      opacity: 0.8,
-      maxZoom: 19,
+      opacity: 1,
+      maxZoom: 20,
     }
   );
 
@@ -72,8 +72,8 @@
     `${WMTS_URL}?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=HYDROGRAPHY.HYDROGRAPHY&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}`,
     {
       attribution: "© IGN",
-      opacity: 0.7,
-      maxZoom: 19,
+      opacity: 0.8,
+      maxZoom: 18,
     }
   );
 
@@ -82,46 +82,53 @@
     `${WMTS_URL}?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=TRANSPORTNETWORKS.ROADS&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}`,
     {
       attribution: "© IGN",
-      opacity: 0.6,
-      maxZoom: 19,
+      opacity: 0.7,
+      maxZoom: 18,
     }
   );
 
   /* ===== LAYER SYNC ===== */
 
   function syncLayers() {
-    // Landgebruik = Kadaster (percelen zichtbaar)
-    if (chkOCS.checked) {
+    // Kadaster
+    if (chkOCS && chkOCS.checked) {
       if (!map.hasLayer(cadastre)) map.addLayer(cadastre);
     } else {
       if (map.hasLayer(cadastre)) map.removeLayer(cadastre);
     }
 
-    // Bebouwing = Plan IGN
-    if (chkB.checked) {
+    // Plan IGN
+    if (chkB && chkB.checked) {
       if (!map.hasLayer(planIgn)) map.addLayer(planIgn);
     } else {
       if (map.hasLayer(planIgn)) map.removeLayer(planIgn);
     }
 
-    // Infrastructuur = Transport
-    if (chkT.checked) {
+    // Luchtfoto
+    if (chkOrtho && chkOrtho.checked) {
+      if (!map.hasLayer(ortho)) map.addLayer(ortho);
+    } else {
+      if (map.hasLayer(ortho)) map.removeLayer(ortho);
+    }
+
+    // Wegen
+    if (chkT && chkT.checked) {
       if (!map.hasLayer(transport)) map.addLayer(transport);
     } else {
       if (map.hasLayer(transport)) map.removeLayer(transport);
     }
 
-    // Waterlopen = Hydro
-    if (chkH.checked) {
+    // Waterlopen
+    if (chkH && chkH.checked) {
       if (!map.hasLayer(hydro)) map.addLayer(hydro);
     } else {
       if (map.hasLayer(hydro)) map.removeLayer(hydro);
     }
   }
 
-  [chkOCS, chkB, chkT, chkH].forEach((c) =>
-    c.addEventListener("change", syncLayers)
-  );
+  [chkOCS, chkB, chkOrtho, chkT, chkH].forEach((c) => {
+    if (c) c.addEventListener("change", syncLayers);
+  });
 
   // Initiële sync
   syncLayers();
