@@ -146,7 +146,7 @@
     banTimer = setTimeout(async () => {
       try {
         const r = await fetch(
-          `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=5`
+          `https://data.geopf.fr/geocodage/search?q=${encodeURIComponent(q)}&limit=5`
         );
         const d = await r.json();
         if (!d.features?.length) {
